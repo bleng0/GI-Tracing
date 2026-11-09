@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+{% set b = d.batch %}
+<dl class="facts">
+<dt>Product</dt><dd>{{ b.product }} (HS {{ b.hs_code }})</dd>
+<dt>Origin</dt><dd>{{ b.origin }} · {{ b.coop_name }} · GI {{ b.gi_registry_code }}</dd>
+<dt>Artisan</dt><dd>{{ b.artisan_name }}</dd>
+<dt>Weight</dt><dd>{{ b.weight_kg }} kg</dd>
+<dt>Made</dt><dd>{{ b.created_on }}</dd>
+<dt>Materials</dt><dd>{{ b.materials|join(", ") }}</dd>
+<dt>Ledger anchor</dt><dd>{% if d.anchor %}block {{ d.anchor.index }} on the {{ b.origin }} ledger, {{ d.anchor.at }}<br><code>{{ d.anchor.block }}</code>{% else %}none (not verified){% endif %}</dd>
+</dl>
+<h2>Certificates</h2>
+{% for cert in d.certificates %}
+<table class="kv">{% for k, v in cert %}<tr><th>{{ k }}</th><td>{{ v }}</td></tr>{% endfor %}</table>
+{% else %}<p>None.</p>{% endfor %}
+<h2>Shipments</h2>
+{% for s in d.shipments %}<p>{{ s.shipment_id }}: {{ s.origin }} → {{ s.dest }}, {{ s.status }}</p>{% else %}<p>None.</p>{% endfor %}
+<h2>Documents</h2>
+<ul>{% for doc in d.documents %}<li>{{ doc.doc_id }}</li>{% else %}<li>None.</li>{% endfor %}</ul>
+{% endblock %}

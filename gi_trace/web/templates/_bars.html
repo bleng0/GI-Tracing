@@ -1,0 +1,5 @@
+{% macro bars(items) %}
+<table class="bars">
+{% for b in items %}<tr><th>{{ b.label }}</th><td><meter min="0" max="{{ b.max }}" value="{{ b.value }}">{{ b.value }}</meter></td><td class="num">{{ b.value }}</td></tr>{% endfor %}
+</table>
+{% endmacro %}

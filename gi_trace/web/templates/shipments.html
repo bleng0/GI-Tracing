@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<table>
+<tr><th>Shipment</th><th>Batch</th><th>From</th><th>To</th><th>Weight (kg)</th><th>Packages</th><th>Status</th><th>Locked</th><th>Last change</th></tr>
+{% for s in rows %}<tr class="{{ s.status|lower }}"><td>{{ s.shipment_id }}</td><td>{{ s.batch_id }}</td><td>{{ s.origin }}</td><td>{{ s.dest }}</td>
+<td class="num">{{ s.weight_kg }}</td><td class="num">{{ s.packages }}</td><td>{{ s.status }}</td><td>{{ s.locked_at }}</td><td>{{ s.updated_at }}</td></tr>
+{% else %}<tr><td colspan="9">No shipments.</td></tr>{% endfor %}
+</table>
+{% endblock %}

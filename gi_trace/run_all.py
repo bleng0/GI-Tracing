@@ -28,7 +28,8 @@ from .docgen.qr import qr_payload, write_qr
 from .handshake import BorderGateway, HandshakeError
 from .ledger import LedgerError
 from .oracle import run_oracle
-from .seed import WorldError, build_world, set_pipeline_status
+from .seed import WorldError, build_world, publish_world, set_pipeline_status, staging_dir
+from .snapshot import take_snapshot
 from .sql_store import get_batch
 from .tiles import materialize_compliance_view
 
@@ -52,13 +53,32 @@ def reset_out(out_dir: Path) -> None:
 
 
 def run_pipeline(data_dir="data", out_dir="out", sample: str = "full", log=print) -> dict:
+    """Builds the new world in <data>.new and moves it into `data_dir` only when the
+    whole run (and, online, the offline copy) has succeeded, so a failed run leaves the
+    previous world, and the dashboard showing it, untouched. users.db is never touched."""
+    data_dir = Path(data_dir)
+    staging = staging_dir(data_dir)
+    if staging.exists():  # left by an interrupted run
+        shutil.rmtree(staging)
+    summary = _pipeline(staging, data_dir, Path(out_dir), sample, log)
+    publish_world(staging, data_dir)
+    return summary
+
+
+def _pipeline(build_dir: Path, data_dir: Path, out_dir: Path, sample: str, log) -> dict:
     t0 = time.perf_counter()
-    data_dir, out_dir = Path(data_dir), Path(out_dir)
     step = iter(range(1, 100))
 
     log(f"{next(step):>2}. reset {out_dir}/ and seed {data_dir}/ ({sample} sample)")
     reset_out(out_dir)
-    w = build_world(data_dir, sample=sample)
+    w = build_world(build_dir, sample=sample)
+    try:
+        return _run(w, t0, step, data_dir, out_dir, sample, log)
+    finally:
+        w.conn.close()
+
+
+def _run(w, t0, step, data_dir: Path, out_dir: Path, sample: str, log) -> dict:
     log("    document store: " + ("OFFLINE MODE (local file store)" if w.offline else "MongoDB Atlas"))
     set_pipeline_status(w, "running")  # set to "complete" at the very end
     batches = {b: get_batch(w.conn, b) for b in w.expected}
@@ -166,8 +186,10 @@ def run_pipeline(data_dir="data", out_dir="out", sample: str = "full", log=print
     log(f"{next(step):>2}. summary report -> {out_dir / 'reports' / 'summary.html'}")
     write_report(summary, out_dir / "reports" / "summary.html")
     set_pipeline_status(w, "complete")
+    if not w.offline:
+        log(f"{next(step):>2}. offline copy of the Atlas data -> {data_dir}")
+        summary["snapshot_at"] = take_snapshot(w, log=lambda *_: None)
     summary["seconds"] = round(time.perf_counter() - t0, 1)
-    w.conn.close()
     return summary
 
 

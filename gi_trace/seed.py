@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import shutil
 from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,7 +48,7 @@ from .keystore import (
 from .ledger import Ledger
 from .ledger_store import AtlasLedgerStore, FileLedgerStore
 from .sql_store import connect, get_batch, reset
-from .storage import StorageError, read_text
+from .storage import StorageError, read_text, replace_path
 
 JURISDICTIONS = ("NP", "IN", "PK")
 REDACTION_THRESHOLD = 3  # of the 6 regulators (3 customs offices + 3 GI registries)
@@ -175,7 +176,8 @@ def build_world(data_dir=None, sample: str = "core") -> SimpleNamespace:
             (paths.labfiles / f"{batch_id}.csv").write_bytes(content)
         for ledger in ledgers.values():
             ledger_store.attach(ledger)  # saved now and after every append
-        write_json(paths.manifest, {"format": 1, "sample": sample, "complete": True})
+        write_json(paths.manifest, {"format": 1, "sample": sample, "complete": True,
+                                    "store": "file" if world.offline else "atlas"})
     return world
 
 
@@ -184,6 +186,38 @@ def _ledger_store(store, paths, checkpoint_key):
     if is_offline(store):
         return FileLedgerStore(paths.ledgers, checkpoint_key)
     return AtlasLedgerStore(store, checkpoint_key)
+
+
+# What a world is made of in data/; publish_world moves exactly these. users.db stays.
+WORLD_ITEMS = ("gi_trace.db", "documents.json", "keys", "ledgers", "labfiles")
+
+
+def staging_dir(data_dir) -> Path:
+    """Where run_all builds the next world before it replaces data/."""
+    d = Path(data_dir)
+    return d.with_name(d.name + ".new")
+
+
+def publish_world(staging, data_dir) -> None:
+    """Moves a finished world from `staging` into `data_dir`, replacing the world there.
+    world.json goes out first and comes back last, so a half-moved folder is never
+    opened as a complete world. Other files in data_dir (users.db) are left alone."""
+    staging, data_dir = Path(staging), Path(data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    old = data_dir / ".previous"
+    if old.exists():
+        shutil.rmtree(old)
+    old.mkdir()
+    if (data_dir / "world.json").exists():
+        replace_path(data_dir / "world.json", old / "world.json")
+    for name in WORLD_ITEMS:
+        if (data_dir / name).exists():
+            replace_path(data_dir / name, old / name)
+        if (staging / name).exists():
+            replace_path(staging / name, data_dir / name)
+    replace_path(staging / "world.json", data_dir / "world.json")
+    shutil.rmtree(old, ignore_errors=True)
+    shutil.rmtree(staging, ignore_errors=True)
 
 
 def save_world(world) -> None:
@@ -195,23 +229,28 @@ def save_world(world) -> None:
         ledger.on_change(ledger)
 
 
-def open_world(data_dir) -> SimpleNamespace:
+def open_world(data_dir, role: str = "write", mode: str | None = None) -> SimpleNamespace:
     """Reopens a world saved under `data_dir`. Refuses (WorldError, LedgerError,
     KeystoreError or StorageError) a world that is incomplete, fails verification,
-    or whose keys, ledgers, documents and SQL rows do not agree with each other."""
+    or whose keys, ledgers, documents and SQL rows do not agree with each other.
+    `role="read"` connects to Atlas with ATLAS_READ_URI (dashboard, snapshot, verify).
+    A world built offline always opens offline: Atlas holds a different world.
+    `mode` overrides GI_MODE (the dashboard uses "offline" when Atlas drops)."""
     paths = _paths(data_dir)
-    required = [paths.manifest, paths.db]
-    store = open_store(paths.docs)
-    if is_offline(store):
-        required.append(paths.docs)
-    for f in required:
-        if not f.exists():
-            raise FileNotFoundError(f"{f} not found: no saved world in {paths.root}")
+    if not paths.manifest.exists():
+        raise FileNotFoundError(f"{paths.manifest} not found: no saved world in {paths.root}")
     try:
         manifest = json.loads(read_text(paths.manifest))
         sample, complete = manifest["sample"], manifest["complete"]
     except (ValueError, KeyError, TypeError) as e:
         raise WorldError(f"unreadable {paths.manifest}: {e!r}") from e
+    if manifest.get("store") == "file":
+        mode = "offline"
+    store = open_store(paths.docs, role=role, mode=mode)
+    required = [paths.db] + ([paths.docs] if is_offline(store) else [])
+    for f in required:
+        if not f.exists():
+            raise FileNotFoundError(f"{f} not found: no saved world in {paths.root}")
     if sample not in SAMPLES:
         raise WorldError(f"unknown sample {sample!r} in {paths.manifest}")
     if complete is not True:
@@ -253,7 +292,8 @@ def open_world(data_dir) -> SimpleNamespace:
         ledgers=ledgers, shares=shares, lab_files=lab_files,
         expected={b: failures.get(b) for b in batch_ids},
         sample=sample, data_dir=paths.root, pipeline=manifest.get("pipeline", "complete"),
-        offline=is_offline(store), ledger_store=ledger_store,
+        offline=is_offline(store), ledger_store=ledger_store, snapshot_at=manifest.get("snapshot_at"),
+        built_on=manifest.get("store"),
     )
     problems = world_problems(world)
     if problems:

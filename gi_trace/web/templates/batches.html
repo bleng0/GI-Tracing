@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<table>
+<tr><th>Batch</th><th>Origin</th><th>Product</th><th>Cooperative</th><th>Made</th><th>Status</th><th>Certificates</th></tr>
+{% for r in rows %}<tr class="{{ r.status }}">
+<td><a href="{{ url_for('batch', batch_id=r.batch_id) }}">{{ r.batch_id }}</a></td><td>{{ r.origin }}</td><td>{{ r.product }}</td>
+<td>{{ r.coop_name }}</td><td>{{ r.created_on }}</td><td>{{ r.status }}</td>
+<td>{% for t, s in r.certificates %}{{ t }} ({{ s }}){% if not loop.last %}, {% endif %}{% endfor %}</td></tr>{% endfor %}
+</table>
+{% endblock %}

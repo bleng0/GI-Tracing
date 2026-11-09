@@ -173,6 +173,24 @@ class UserStore:
             conn.close()
         return name
 
+    def list_users(self, now: float | None = None) -> list[dict]:
+        now = time.time() if now is None else now
+        conn = self._connect()
+        try:
+            return [{"username": r["username"], "role": r["role"], "created_at": r["created_at"],
+                     "locked": r["locked_until"] > now}
+                    for r in conn.execute("SELECT * FROM users ORDER BY role, username")]
+        finally:
+            conn.close()
+
+    def recent_audit(self, limit: int = 200) -> list[dict]:
+        conn = self._connect()
+        try:
+            return [dict(r) for r in conn.execute(
+                "SELECT ts, event, username, detail FROM audit_log ORDER BY id DESC LIMIT ?", (limit,))]
+        finally:
+            conn.close()
+
     def authenticate(self, username: str, password: str, now: float | None = None) -> AuthResult:
         now = time.time() if now is None else now
         try:

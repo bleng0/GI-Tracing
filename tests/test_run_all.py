@@ -101,10 +101,31 @@ def test_interrupted_run_is_flagged(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(ra, "materialize_compliance_view", boom)
     with pytest.raises(KeyboardInterrupt):
         run_pipeline(tmp_path / "data", tmp_path / "out", sample="core", log=lambda *_: None)
-    assert open_world(tmp_path / "data").pipeline == "running"
+    # the half-built world stays in data.new, flagged as running; data/ never received it
+    assert not (tmp_path / "data" / "world.json").exists()
+    assert open_world(tmp_path / "data.new").pipeline == "running"
     from gi_trace.docgen.verify import main as verify_main
-    verify_main([str(tmp_path / "out" / "certificates"), "--data", str(tmp_path / "data")])
+    verify_main([str(tmp_path / "out" / "certificates"), "--data", str(tmp_path / "data.new")])
     assert "did not finish" in capsys.readouterr().out
+
+
+def test_a_failed_run_leaves_the_previous_world_in_place(tmp_path, monkeypatch):
+    import gi_trace.run_all as ra
+    run_pipeline(tmp_path / "data", tmp_path / "out", sample="core", log=lambda *_: None)
+    before = [b.hash for b in open_world(tmp_path / "data").ledgers["NP"].blocks]
+    (tmp_path / "data" / "users.db").write_bytes(b"accounts")  # never touched by a run
+
+    def boom(*a, **k):
+        raise RuntimeError("network dropped")
+    monkeypatch.setattr(ra, "materialize_compliance_view", boom)
+    with pytest.raises(RuntimeError):
+        run_pipeline(tmp_path / "data", tmp_path / "out", sample="core", log=lambda *_: None)
+    w = open_world(tmp_path / "data")
+    assert w.pipeline == "complete" and [b.hash for b in w.ledgers["NP"].blocks] == before
+    monkeypatch.undo()
+    run_pipeline(tmp_path / "data", tmp_path / "out", sample="core", log=lambda *_: None)
+    assert not (tmp_path / "data.new").exists() and not (tmp_path / "data" / ".previous").exists()
+    assert (tmp_path / "data" / "users.db").read_bytes() == b"accounts"
 
 
 def test_switching_samples_leaves_no_stale_files(tmp_path):

@@ -182,7 +182,10 @@ def test_pipeline_fills_atlas_as_before(atlas_run):
     assert (summary["passed"], summary["failed"]) == (21, 9)
     assert fake.db.certificates.count_documents({}) > 0
     assert fake.db.documents.count_documents({}) == summary["pdf_count"]
-    assert not (root / "data" / "documents.json").exists()
+    # the only local copy is the offline snapshot written once at the end (Step 6)
+    assert summary["snapshot_at"]
+    local = FileDocStore(root / "data" / "documents.json")
+    assert len(list(local.get_collection("documents").find())) == summary["pdf_count"]
     out = io.StringIO()
     print_table(summary, out)
     assert "document store: MongoDB Atlas" in out.getvalue()

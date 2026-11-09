@@ -55,11 +55,11 @@ def _unreachable(e: Exception) -> bool:
     return isinstance(e, ConfigurationError) and not isinstance(e, InvalidURI)
 
 
-def open_store(path=None, load: bool = True, role: str = "write", log=print):
-    """The gi_trace database, chosen by GI_MODE (see the module docstring).
+def open_store(path=None, load: bool = True, role: str = "write", log=print, mode: str | None = None):
+    """The gi_trace database, chosen by `mode`, else GI_MODE (see the module docstring).
     `role` is "write" (pipeline) or "read" (dashboard). Returns a pymongo Database
     online or a FileDocStore at `path` offline; is_offline() tells which."""
-    mode = os.environ.get("GI_MODE", "auto").strip().lower() or "auto"
+    mode = mode or os.environ.get("GI_MODE", "auto").strip().lower() or "auto"
     if mode not in MODES:
         raise ValueError(f"GI_MODE must be one of {MODES}, not {mode!r}")
     if mode != "offline":

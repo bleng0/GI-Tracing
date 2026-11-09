@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+{% if result %}
+<section class="result {{ result.status|lower }}">
+<h2>{{ result.status }}{% if result.doc_id %}: {{ result.doc_id }}{% endif %}</h2>
+{% if result.reasons %}<ul>{% for r in result.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+{% elif result.status == "VALID" %}<p>Matches its registration, its signature verifies and the ledger records it.</p>{% endif %}
+</section>
+{% endif %}
+<form method="post" enctype="multipart/form-data" class="verify">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label>PDF issued by this system <input type="file" name="pdf" accept="application/pdf"></label>
+  <p>or</p>
+  <label>Text of a QR code (scan it with any QR app and paste the text)
+    <textarea name="qr" rows="3" spellcheck="false"></textarea></label>
+  <button type="submit">Verify</button>
+</form>
+{% endblock %}

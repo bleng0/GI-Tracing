@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import glob
 import io
+import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -84,7 +85,7 @@ def verify_pdf(pdf_path, world, valid_chains: set | None = None) -> VerifyResult
     if registered.name != rec.get("file_name"):
         reasons.append("registered path and file name disagree")
     elif registered.is_file() and sha256_hex(registered.read_bytes()) != rec.get("sha256"):
-        reasons.append(f"the file at the registered path {registered} is not the registered PDF")
+        reasons.append(f"the file at the registered location ({registered.name}) is not the registered PDF")
     if rec.get("qr_payload") != qr_payload(doc_id=rec.get("doc_id"), twin_sha256=rec.get("twin_sha256"),
                                            ledger=rec.get("ledger"), block=rec.get("ledger_block")):
         reasons.append("registered QR payload does not match the document")
@@ -111,6 +112,60 @@ def verify_pdf(pdf_path, world, valid_chains: set | None = None) -> VerifyResult
         elif valid_chains is not None:
             valid_chains.add(ledger.jurisdiction)
     return VerifyResult(TAMPERED if reasons else VALID, rec.get("doc_id"), reasons)
+
+
+DOC_QR_KEYS = {"doc_id", "twin_sha256", "ledger", "block"}
+BATCH_QR_KEYS = {"batch_id", "gi", "ledger", "anchor_block"}
+
+
+def _chain_ok(ledger, valid_chains: set | None) -> bool:
+    if valid_chains is not None and ledger.jurisdiction in valid_chains:
+        return True
+    if ledger.verify_chain():
+        return False
+    if valid_chains is not None:
+        valid_chains.add(ledger.jurisdiction)
+    return True
+
+
+def verify_qr(text: str, world, valid_chains: set | None = None) -> VerifyResult:
+    """Checks the text of a QR code: a document QR (printed on every PDF) or a batch QR
+    (written by the oracle). VALID only if the ledger block it names exists, matches,
+    and its ledger verifies."""
+    try:
+        data = json.loads(text)
+    except (ValueError, TypeError):
+        data = None
+    if not isinstance(data, dict) or set(data) not in (DOC_QR_KEYS, BATCH_QR_KEYS) \
+            or not all(isinstance(v, str) and v for v in data.values()):
+        return VerifyResult(UNKNOWN, reasons=["not a QR code from this system"])
+    ledger = world.ledgers.get(data.get("ledger"))
+    if set(data) == DOC_QR_KEYS:
+        doc_id = data["doc_id"]
+        rec = world.store.get_collection("documents").find_one({"doc_id": doc_id})
+        block = next((b for b in ledger.blocks if b.hash == data["block"]), None) if ledger else None
+        if rec is None:
+            if block is not None and block.tx_type == "DOCUMENT":
+                return VerifyResult(TAMPERED, doc_id, ["issued according to the ledger, but missing from the document store"])
+            return VerifyResult(UNKNOWN, doc_id, ["no such document"])
+        reasons = []
+        if rec.get("qr_payload") != canonical(data).decode():
+            reasons.append("this QR code does not match the registered document (an older or altered copy?)")
+        if block is None or block.tx_type != "DOCUMENT" or block.payload.get("doc_id") != doc_id \
+                or block.payload.get("twin_sha256") != data["twin_sha256"]:
+            reasons.append("no matching DOCUMENT block on the ledger")
+        elif not _chain_ok(ledger, valid_chains):
+            reasons.append(f"the {ledger.jurisdiction} ledger fails verification")
+        return VerifyResult(TAMPERED if reasons else VALID, doc_id, reasons)
+    batch_id = data["batch_id"]
+    anchors = [b for b in ledger.find("BATCH_ANCHOR", batch_id=batch_id)] if ledger else []
+    if not anchors:
+        return VerifyResult(UNKNOWN, batch_id, ["no verified batch with this id on that ledger"])
+    if not any(b.hash == data["anchor_block"] for b in anchors):
+        return VerifyResult(TAMPERED, batch_id, ["the anchor block in this QR code is not the batch's anchor"])
+    if not _chain_ok(ledger, valid_chains):
+        return VerifyResult(TAMPERED, batch_id, [f"the {ledger.jurisdiction} ledger fails verification"])
+    return VerifyResult(VALID, batch_id)
 
 
 def main(argv=None) -> int:

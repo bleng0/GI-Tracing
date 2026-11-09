@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Accounts are created with <code>python -m gi_trace.web.create_user</code>.</p>
+<table><tr><th>Username</th><th>Role</th><th>Created</th><th>Locked</th></tr>
+{% for u in rows %}<tr><td>{{ u.username }}</td><td>{{ u.role }}</td><td>{{ u.created_at }}</td><td>{{ "yes" if u.locked else "" }}</td></tr>{% endfor %}
+</table>
+{% endblock %}

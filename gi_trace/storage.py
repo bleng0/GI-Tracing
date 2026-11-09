@@ -44,6 +44,19 @@ def atomic_write_text(path: Path, text: str) -> None:
             time.sleep(0.1)
 
 
+def replace_path(src: Path, dst: Path) -> None:
+    """os.replace for a file or folder, retried while Windows briefly holds the target
+    (antivirus, indexer, a dashboard request reading it)."""
+    for attempt in range(20):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.1)
+
+
 def mtime_ns(path: Path) -> int | None:
     try:
         return Path(path).stat().st_mtime_ns
@@ -126,6 +139,18 @@ class FileDocStore:
         atomic_write_text(self.path, json_util.dumps(snapshot, indent=1,
                                                      json_options=json_util.CANONICAL_JSON_OPTIONS))
         self._disk_mtime = mtime_ns(self.path)
+
+    def replace_all(self, collections: dict[str, list[dict]], indexes: dict[str, list] | None = None) -> None:
+        """Replaces every collection with `collections` and writes the file once (not once per document)."""
+        self._db = mongomock.MongoClient().gi_trace
+        self._collections = {}
+        for name, docs in collections.items():
+            coll = self._db[name]
+            for keys in (indexes or {}).get(name, []):
+                coll.create_index(keys)
+            if docs:
+                coll.insert_many([dict(d) for d in docs])
+        self.save()
 
     def _load(self) -> None:
         try:
