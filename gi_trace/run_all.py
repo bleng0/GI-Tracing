@@ -26,8 +26,9 @@ from .doc_store import load_env
 from .docgen.lab_files import read_lab_file, write_lab_files
 from .docgen.qr import qr_payload, write_qr
 from .handshake import BorderGateway, HandshakeError
+from .ledger import LedgerError
 from .oracle import run_oracle
-from .seed import build_world, set_pipeline_status
+from .seed import WorldError, build_world, set_pipeline_status
 from .sql_store import get_batch
 from .tiles import materialize_compliance_view
 
@@ -96,7 +97,7 @@ def run_pipeline(data_dir="data", out_dir="out", sample: str = "full", log=print
         b = batches[o["batch_id"]]
         origin, dest = b["origin"], o["dest_jurisdiction"]
         gw = BorderGateway(w.ledgers[origin], w.ledgers[dest], w.nodes[f"CUSTOMS-{origin}"],
-                           w.nodes[f"CUSTOMS-{dest}"], w.directory)
+                           w.nodes[f"CUSTOMS-{dest}"], w.directory, pending=w.ledger_store)
         weight = b["weight_kg"] * (10 if o["order_id"] == first_export else 1)  # the deliberate typo
         try:
             gw.initiate(o["order_id"], o["batch_id"], {"weight_kg": weight, "packages": max(1, round(b["weight_kg"] / 5))})
@@ -253,7 +254,7 @@ def main(argv=None) -> int:
             return 2
     try:
         summary = run_pipeline(data_dir, out_dir, args.sample)
-    except PipelineError as e:
+    except (PipelineError, WorldError, LedgerError) as e:
         print(f"error: {e}")
         return 3
     print()

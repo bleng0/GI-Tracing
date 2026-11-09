@@ -8,7 +8,7 @@ What this does not protect against: anyone who can write data/keys/ holds every
 signing key and share, so they can rewrite any ledger. And a ledger cut short at
 its end is still a valid chain; seed.open_world() cross-checks the ledgers against
 each other and against the document store, which catches most but not all
-truncation (for example, losing a trailing REDACTION audit block is not caught).
+truncation; ledger_store.FileLedgerStore adds a signed checkpoint that catches the rest.
 
 attach() saves the ledger after every append, and refuses to save if the file was
 changed on disk by another process since this process last read or wrote it.
@@ -25,7 +25,7 @@ from .storage import mtime_ns, read_text
 FORMAT_VERSION = 1
 
 
-def _block_to_json(b: Block) -> dict:
+def block_to_json(b: Block) -> dict:
     return {
         "index": b.index, "prev_hash": b.prev_hash, "timestamp": b.timestamp, "tx_type": b.tx_type,
         "signer": b.signer, "payload": b.payload, "ch_digest": hex(b.ch_digest),
@@ -33,7 +33,7 @@ def _block_to_json(b: Block) -> dict:
     }
 
 
-def _block_from_json(d: dict) -> Block:
+def block_from_json(d: dict) -> Block:
     return Block(
         index=d["index"], prev_hash=d["prev_hash"], timestamp=d["timestamp"], tx_type=d["tx_type"],
         signer=d["signer"], payload=d["payload"], ch_digest=int(d["ch_digest"], 16),
@@ -45,7 +45,7 @@ def save_ledger(ledger: Ledger, path) -> None:
     write_json(Path(path), {
         "format": FORMAT_VERSION,
         "jurisdiction": ledger.jurisdiction,
-        "blocks": [_block_to_json(b) for b in ledger.blocks],
+        "blocks": [block_to_json(b) for b in ledger.blocks],
     })
 
 
@@ -60,17 +60,22 @@ def load_ledger(path, ledger: Ledger) -> Ledger:
             raise ValueError(f"unknown format {data.get('format')!r}")
         if data["jurisdiction"] != ledger.jurisdiction:
             raise ValueError(f"file is the {data['jurisdiction']} ledger, expected {ledger.jurisdiction}")
-        blocks = [_block_from_json(d) for d in data["blocks"]]
+        blocks = [block_from_json(d) for d in data["blocks"]]
     except FileNotFoundError:
         raise LedgerError(f"missing ledger file {path}") from None
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise LedgerError(f"cannot read ledger file {path}: {e}") from e
+    return verify_loaded(ledger, blocks, f"ledger file {path}")
+
+
+def verify_loaded(ledger: Ledger, blocks: list[Block], source: str) -> Ledger:
+    """Puts `blocks` into the empty `ledger` and refuses them if the chain does not verify."""
     ledger.blocks = blocks
     try:
         problems = ledger.verify_chain()
-    except Exception as e:  # wrong types or out-of-range numbers in a hand-edited file
+    except Exception as e:  # wrong types or out-of-range numbers in hand-edited data
         ledger.blocks = []
-        raise LedgerError(f"cannot verify ledger file {path}: {e!r}") from e
+        raise LedgerError(f"cannot verify {source}: {e!r}") from e
     if problems:
         ledger.blocks = []
         raise LedgerError(f"{ledger.jurisdiction} ledger failed verification on load: " + "; ".join(problems))

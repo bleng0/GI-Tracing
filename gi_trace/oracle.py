@@ -13,7 +13,8 @@ has a valid certificate:
 Stages: 1 load batch from SQL  2 fetch certificates from MongoDB  3 verify
 signatures  4 check material rules  5 notarise ATTESTATION blocks + BATCH_ANCHOR
 on the origin ledger  6 mark certificates verified  7 write the QR code.
-Nothing is written to the ledger if any check fails.
+Nothing is written to the ledger if any check fails, and nothing is added when
+the batch is already anchored (re-running the oracle on a passed batch).
 """
 from __future__ import annotations
 
@@ -91,15 +92,52 @@ def run_oracle(conn, coll, ledger: Ledger, directory: dict[str, tuple[str, bytes
         coll.update_many({"batch_id": batch_id}, {"$set": {"compliance_status": "rejected"}})
         return result
 
-    # 5. notarise
+    # 5. notarise, unless already done (an earlier run, or one interrupted after its attestations)
+    anchors = ledger.find("BATCH_ANCHOR", batch_id=batch_id)
+    if anchors:
+        anchor = anchors[-1]
+    else:
+        anchor = _notarise(ledger, notary, batch, certs)
+
+    # 6. status back into the document tier
+    coll.update_many({"batch_id": batch_id}, {"$set": {"compliance_status": "verified"}})
+
+    # 7. QR code a buyer or customs officer can scan to look up the anchor
+    qr_payload = canonical({
+        "batch_id": batch_id,
+        "gi": batch["gi_registry_code"],
+        "ledger": ledger.jurisdiction,
+        "anchor_block": anchor.hash,
+    }).decode()
+    qr_dir = Path(qr_dir)
+    qr_dir.mkdir(parents=True, exist_ok=True)
+    qr_path = qr_dir / f"{batch_id}.svg"
+    qrcode.make(qr_payload, image_factory=qrcode.image.svg.SvgPathImage).save(str(qr_path))
+
+    result.passed = True
+    result.anchor_block = anchor.hash
+    result.qr_path = str(qr_path)
+    return result
+
+
+def _notarise(ledger: Ledger, notary: Node, batch: dict, certs: list[dict]):
+    """ATTESTATION per certificate (reusing one already on the ledger for the same
+    certificate), then the BATCH_ANCHOR. Returns the anchor block."""
+    batch_id = batch["batch_id"]
     attestation_blocks = []
     for cert in certs:
+        cert_sha = sha256_hex(canonical(signed_part(cert)))
+        done = [b for b in ledger.find("ATTESTATION", batch_id=batch_id, cert_type=cert["cert_type"])
+                if b.payload.get("cert_sha256") == cert_sha]
+        if done:
+            attestation_blocks.append(done[-1].hash)
+            continue
         block = ledger.append(
             "ATTESTATION",
             {
                 "batch_id": batch_id,
                 "cert_type": cert["cert_type"],
-                "cert_sha256": sha256_hex(canonical(signed_part(cert))),
+                "cert_sha256": cert_sha,
                 "lab_file_sha256": cert.get("lab_file_sha256"),
                 "origin_gps": cert.get("origin_gps"),
                 "operator_code": cert.get("operator_code"),
@@ -121,22 +159,4 @@ def run_oracle(conn, coll, ledger: Ledger, directory: dict[str, tuple[str, bytes
         notary,
     )
 
-    # 6. status back into the document tier
-    coll.update_many({"batch_id": batch_id}, {"$set": {"compliance_status": "verified"}})
-
-    # 7. QR code a buyer or customs officer can scan to look up the anchor
-    qr_payload = canonical({
-        "batch_id": batch_id,
-        "gi": batch["gi_registry_code"],
-        "ledger": ledger.jurisdiction,
-        "anchor_block": anchor.hash,
-    }).decode()
-    qr_dir = Path(qr_dir)
-    qr_dir.mkdir(parents=True, exist_ok=True)
-    qr_path = qr_dir / f"{batch_id}.svg"
-    qrcode.make(qr_payload, image_factory=qrcode.image.svg.SvgPathImage).save(str(qr_path))
-
-    result.passed = True
-    result.anchor_block = anchor.hash
-    result.qr_path = str(qr_path)
-    return result
+    return anchor

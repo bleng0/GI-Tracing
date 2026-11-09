@@ -14,7 +14,8 @@ Python process with open_world(); without it everything stays in memory.
     <data_dir>/gi_trace.db       SQLite (relational tier)
     <data_dir>/documents.json    document store (see storage.py)
     <data_dir>/keys/             node keys, chameleon public keys, shares (see keystore.py)
-    <data_dir>/ledgers/          NP.json, IN.json, PK.json (see ledger_io.py)
+    <data_dir>/ledgers/          NP.json, IN.json, PK.json, checkpoints, pending signatures (offline;
+                                 online the ledgers are in Atlas; see ledger_store.py)
     <data_dir>/labfiles/         raw lab CSVs, one per hemp batch
     <data_dir>/world.json        which sample was seeded, and whether seeding finished
 
@@ -39,9 +40,12 @@ from .crypto import (
     directory_of, sha256_hex,
 )
 from .doc_store import is_offline, open_collection, open_store, signed_part, submit_certificate
-from .keystore import KeystoreError, load_ledger_keys, load_nodes, load_shares, save_keys, write_json
+from .keystore import (
+    KeystoreError, load_checkpoint_key, load_ledger_keys, load_nodes, load_shares, new_checkpoint_key,
+    save_checkpoint_key, save_keys, write_json,
+)
 from .ledger import Ledger
-from .ledger_io import attach, load_ledger
+from .ledger_store import AtlasLedgerStore, FileLedgerStore
 from .sql_store import connect, get_batch, reset
 from .storage import StorageError, read_text
 
@@ -129,7 +133,17 @@ def build_world(data_dir=None, sample: str = "core") -> SimpleNamespace:
 
     data = sample_data(sample)
     paths = _paths(data_dir) if data_dir is not None else None
+    try:
+        store = open_store(paths.docs if paths else None)
+    except StorageError:  # a corrupt store is being replaced anyway
+        store = open_store(paths.docs, load=False)
+    checkpoint_key, ledger_store = new_checkpoint_key(), None
     if paths:
+        ledger_store = _ledger_store(store, paths, checkpoint_key)
+        if isinstance(ledger_store, AtlasLedgerStore) and ledger_store.has_ledgers():
+            raise WorldError("Atlas already holds ledgers, which the pipeline's user cannot delete. To start over, "
+                             "delete all documents in ledger_blocks, ledger_heads and pending_signatures in the "
+                             "Atlas website (see README), or run offline with GI_MODE=offline.")
         paths.root.mkdir(parents=True, exist_ok=True)
         # marked incomplete until the end, so a crash mid-seed is never opened as a world
         write_json(paths.manifest, {"format": 1, "sample": sample, "complete": False})
@@ -138,10 +152,6 @@ def build_world(data_dir=None, sample: str = "core") -> SimpleNamespace:
         reset(conn)
     _seed_sql(conn, data)
 
-    try:
-        store = open_store(paths.docs if paths else None)
-    except StorageError:  # a corrupt store is being replaced anyway
-        store = open_store(paths.docs, load=False)
     coll = open_collection(store)
     for name in SEEDED_COLLECTIONS:
         store.get_collection(name).delete_many({})  # these collections belong to the prototype
@@ -152,19 +162,28 @@ def build_world(data_dir=None, sample: str = "core") -> SimpleNamespace:
         conn=conn, coll=coll, store=store, nodes=nodes, directory=directory_of(nodes.values()),
         ledgers=ledgers, shares=shares, lab_files=data.lab_files, expected=data.expected,
         sample=sample, data_dir=paths.root if paths else None, offline=is_offline(store),
+        ledger_store=ledger_store,
     )
     if paths:
         save_keys(paths.keys, nodes, ledgers, shares)
+        save_checkpoint_key(paths.keys, checkpoint_key)
         paths.labfiles.mkdir(parents=True, exist_ok=True)
         for stale in paths.labfiles.glob("*.csv"):  # e.g. left by a run of the other sample
             if stale.stem not in data.lab_files:
                 stale.unlink()
         for batch_id, content in data.lab_files.items():
             (paths.labfiles / f"{batch_id}.csv").write_bytes(content)
-        for j, ledger in ledgers.items():
-            attach(ledger, paths.ledgers / f"{j}.json")  # saved now and after every append
+        for ledger in ledgers.values():
+            ledger_store.attach(ledger)  # saved now and after every append
         write_json(paths.manifest, {"format": 1, "sample": sample, "complete": True})
     return world
+
+
+def _ledger_store(store, paths, checkpoint_key):
+    """Ledgers live where the documents do: Atlas online, data/ledgers/ offline."""
+    if is_offline(store):
+        return FileLedgerStore(paths.ledgers, checkpoint_key)
+    return AtlasLedgerStore(store, checkpoint_key)
 
 
 def save_world(world) -> None:
@@ -208,6 +227,7 @@ def open_world(data_dir) -> SimpleNamespace:
         raise KeystoreError(f"ledger keys must cover exactly {JURISDICTIONS}")
     regulators = [r.name for r in _regulators(nodes)]
     shares = load_shares(paths.keys, regulators)
+    ledger_store = _ledger_store(store, paths, load_checkpoint_key(paths.keys))
     ledgers = {}
     for j in JURISDICTIONS:
         k = ledger_keys[j]
@@ -218,7 +238,7 @@ def open_world(data_dir) -> SimpleNamespace:
                 [held[r] for r in regulators], REDACTION_THRESHOLD, k["ch_public_key"]):
             raise KeystoreError(f"the {j} trapdoor shares are missing or altered")
         empty = Ledger(j, k["ch_public_key"], _members(nodes, j), REDACTION_THRESHOLD)
-        ledgers[j] = load_ledger(paths.ledgers / f"{j}.json", empty)
+        ledgers[j] = ledger_store.load(empty)
 
     conn = connect(str(paths.db))
     batch_ids = [r[0] for r in conn.execute("SELECT batch_id FROM batches ORDER BY batch_id")]
@@ -233,13 +253,15 @@ def open_world(data_dir) -> SimpleNamespace:
         ledgers=ledgers, shares=shares, lab_files=lab_files,
         expected={b: failures.get(b) for b in batch_ids},
         sample=sample, data_dir=paths.root, pipeline=manifest.get("pipeline", "complete"),
-        offline=is_offline(store),
+        offline=is_offline(store), ledger_store=ledger_store,
     )
     problems = world_problems(world)
     if problems:
         raise WorldError("saved world is inconsistent: " + "; ".join(problems))
-    for j, ledger in ledgers.items():
-        attach(ledger, paths.ledgers / f"{j}.json", save_now=False)
+    for ledger in ledgers.values():  # after the cross-checks, which name a missing block more precisely
+        ledger_store.check_checkpoint(ledger)
+    for ledger in ledgers.values():
+        ledger_store.attach(ledger, save_now=False)
     return world
 
 

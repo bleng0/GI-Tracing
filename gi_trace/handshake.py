@@ -39,8 +39,10 @@ class Shipment:
 
 class BorderGateway:
     def __init__(self, origin: Ledger, dest: Ledger, origin_customs: Node, dest_customs: Node,
-                 directory: dict[str, tuple[str, bytes]]):
+                 directory: dict[str, tuple[str, bytes]], pending=None):
+        """`pending` (a LedgerStore) keeps each signature as it arrives, so a restart can finish the shipment."""
         self.origin, self.dest = origin, dest
+        self.pending = pending
         self.origin_customs, self.dest_customs = origin_customs, dest_customs
         self.directory = directory
         self.shipments: dict[str, Shipment] = {}
@@ -98,7 +100,8 @@ class BorderGateway:
 
     def _recover(self, shipment_id: str) -> Shipment | None:
         """Rebuilds a shipment from its LOCK block, e.g. after a restart. Signatures
-        collected before the restart are not on the ledger and must be given again."""
+        collected before the restart come back from the pending store, if there is one;
+        each is checked again and an invalid one is dropped."""
         locks = [b for b in self.origin.find("LOCK", shipment_id=shipment_id)
                  if b.payload.get("dest") == self.dest.jurisdiction]
         if not locks:
@@ -112,6 +115,12 @@ class BorderGateway:
             state = "LOCKED"
         s = Shipment(shipment_id, lock.payload["batch_id"], dict(lock.payload["required_signers"]),
                      self._message(shipment_id, lock.payload["batch_id"], lock.hash), lock.hash, state)
+        if state == "LOCKED" and self.pending is not None:
+            for role, rec in self.pending.load_signatures(shipment_id).items():
+                name = s.required.get(role)
+                if name in self.directory and rec.get("signer") == name \
+                        and verify(self.directory[name][1], s.message, rec.get("signature")):
+                    s.signatures[role] = rec["signature"]
         self.shipments[shipment_id] = s
         return s
 
@@ -123,6 +132,8 @@ class BorderGateway:
         if not verify(public_key, s.message, signature):
             raise HandshakeError(f"invalid {role} signature")
         s.signatures[role] = signature
+        if self.pending is not None:
+            self.pending.save_signature(shipment_id, role, s.required[role], signature)
 
     def commit(self, shipment_id: str) -> Block:
         s = self._locked(shipment_id)

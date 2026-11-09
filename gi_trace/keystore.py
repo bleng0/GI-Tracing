@@ -3,6 +3,7 @@
     data/keys/nodes.json          node name -> role, jurisdiction, Ed25519 private key (hex)
     data/keys/ledgers.json        jurisdiction -> chameleon public key y (hex), redaction threshold
     data/keys/shares/<name>.json  one file per regulator: its Shamir share of each ledger's trapdoor
+    data/keys/checkpoint.json     private key that signs each ledger's latest-block checkpoint
 
 The chameleon trapdoor itself is never written, only its shares. In real use each
 share would be held by a different regulator on its own machine; locally they all
@@ -85,3 +86,22 @@ def load_shares(keys_dir, holders) -> dict[str, dict[str, tuple[int, int]]]:
         except (ValueError, TypeError, AttributeError) as e:
             raise KeystoreError(f"bad share file for {holder}: {e}") from e
     return shares
+
+
+CHECKPOINT_SIGNER = "LEDGER-CHECKPOINT"
+
+
+def new_checkpoint_key() -> Node:
+    return Node(CHECKPOINT_SIGNER, "CHECKPOINT", "LOCAL")
+
+
+def save_checkpoint_key(keys_dir, key: Node) -> None:
+    write_json(Path(keys_dir) / "checkpoint.json", {"private_key": key.private_bytes().hex()})
+
+
+def load_checkpoint_key(keys_dir) -> Node:
+    data = _read_json(Path(keys_dir) / "checkpoint.json")
+    try:
+        return Node(CHECKPOINT_SIGNER, "CHECKPOINT", "LOCAL", bytes.fromhex(data["private_key"]))
+    except (KeyError, ValueError, TypeError, AttributeError) as e:
+        raise KeystoreError(f"bad checkpoint key: {e}") from e

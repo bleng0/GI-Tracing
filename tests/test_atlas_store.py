@@ -9,6 +9,7 @@ import pytest
 from pymongo.errors import ConfigurationError, OperationFailure, ServerSelectionTimeoutError
 
 from gi_trace import check_atlas, doc_store
+from gi_trace.atlas_setup import build_schema
 from gi_trace.doc_store import AtlasUnavailable, is_offline, open_store
 from gi_trace.run_all import print_table, run_pipeline
 from gi_trace.seed import open_world
@@ -36,8 +37,12 @@ class WriterColl:
 
 
 class FakeAtlas:
+    """The gi_trace database after atlas_setup: same collections and (unique) indexes."""
+
     def __init__(self):
-        self.db = mongomock.MongoClient().gi_trace
+        client = mongomock.MongoClient()
+        build_schema(client)
+        self.db = client.gi_trace
 
     def get_collection(self, name):
         return WriterColl(self.db[name])
@@ -162,7 +167,7 @@ def atlas_run(tmp_path_factory):
     mp.setenv("GI_MODE", "atlas")
     mp.setenv("ATLAS_WRITE_URI", "mongodb://writer")
     # data a re-seed must leave alone
-    for name in ("audit_log", "ledger_blocks"):
+    for name in ("audit_log", "pending_signatures"):
         fake.db[name].insert_one({"keep": name})
     root = tmp_path_factory.mktemp("atlas_run")
     summary = run_pipeline(root / "data", root / "out", log=lambda *_: None)
@@ -184,14 +189,14 @@ def test_pipeline_fills_atlas_as_before(atlas_run):
 
 def test_seeding_clears_only_certificates_and_documents(atlas_run):
     _, fake, _, _ = atlas_run
-    for name in ("audit_log", "ledger_blocks"):
+    for name in ("audit_log", "pending_signatures"):
         assert fake.db[name].find_one({"keep": name}) is not None
 
 
 def test_everything_stored_is_valid_bson(atlas_run):
     """mongomock is lenient; a real server rejects what BSON cannot encode (e.g. ints over 64 bits)."""
     _, fake, _, _ = atlas_run
-    for name in ("certificates", "documents"):
+    for name in ("certificates", "documents", "ledger_blocks", "ledger_heads", "pending_signatures"):
         for doc in fake.db[name].find():
             bson.encode(doc)
 
