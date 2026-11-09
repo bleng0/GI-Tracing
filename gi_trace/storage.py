@@ -58,12 +58,13 @@ def read_text(path: Path) -> str:
 
 def ensure_index(coll, keys, **kwargs) -> str | None:
     """create_index, except on Atlas, where the pipeline's user may not create indexes:
-    a refusal (Unauthorized, code 13) is ignored and the indexes atlas_setup made are used."""
+    the refusal is ignored and the indexes atlas_setup made are used. MongoDB reports it
+    as Unauthorized (code 13); Atlas as AtlasError (code 8000) naming the createIndex action."""
     from pymongo.errors import OperationFailure
     try:
         return coll.create_index(keys, **kwargs)
     except OperationFailure as e:
-        if e.code == 13:
+        if e.code == 13 or (e.code == 8000 and "[createIndex]" in str(e)):
             return None
         raise
 

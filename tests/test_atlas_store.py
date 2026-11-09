@@ -27,8 +27,9 @@ class WriterColl:
     def __getattr__(self, name):
         return getattr(self._coll, name)
 
-    def create_index(self, *a, **k):
-        raise OperationFailure("not authorized", code=13)
+    def create_index(self, *a, **k):  # the refusal exactly as real Atlas sends it
+        raise OperationFailure(f"user is not allowed to do action [createIndex] on [gi_trace.{self._coll.name}]",
+                               code=8000, details={"codeName": "AtlasError"})
 
     def delete_many(self, *a, **k):
         if self._coll.name not in DELETABLE:
@@ -236,3 +237,23 @@ def test_check_atlas_reports_missing_uri_and_connection_failure():
     assert check_atlas.run({"ATLAS_WRITE_URI": "w", "ATLAS_READ_URI": "r"},
                            connect=failing(ServerSelectionTimeoutError("timed out")), log=log.append) == 1
     assert log[-1].startswith("ERROR: ServerSelectionTimeoutError")
+
+
+@pytest.mark.parametrize("error,ignored", [
+    (OperationFailure("not authorized", code=13), True),
+    (OperationFailure("user is not allowed to do action [createIndex] on [gi_trace.x]", code=8000), True),
+    (OperationFailure("user is not allowed to do action [insert] on [gi_trace.x]", code=8000), False),
+    (OperationFailure("something else", code=2), False),
+])
+def test_ensure_index_ignores_only_an_index_refusal(error, ignored):
+    from gi_trace.storage import ensure_index
+
+    class Coll:
+        def create_index(self, *a, **k):
+            raise error
+
+    if ignored:
+        assert ensure_index(Coll(), "batch_id") is None
+    else:
+        with pytest.raises(OperationFailure):
+            ensure_index(Coll(), "batch_id")
