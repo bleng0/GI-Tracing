@@ -6,8 +6,13 @@ from gi_trace.seed import build_world
 
 @pytest.fixture(autouse=True)
 def no_real_mongodb(monkeypatch):
-    """Tests always use the local document store, never a MongoDB named by MONGO_URI."""
-    monkeypatch.delenv("MONGO_URI", raising=False)
+    """Tests always use the local document store, never Atlas, and never read .env
+    (the command-line main() functions load it)."""
+    import dotenv
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False)
+    monkeypatch.setenv("GI_MODE", "offline")
+    for var in ("ATLAS_WRITE_URI", "ATLAS_READ_URI"):
+        monkeypatch.delenv(var, raising=False)
 
 
 @pytest.fixture

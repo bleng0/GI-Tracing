@@ -22,6 +22,7 @@ from .docgen.certificates import (
     certificate_pdf, documents_collection, export_clearance_pdf, membership_letter_pdf,
     redaction_notice_pdf, waybill_pdf,
 )
+from .doc_store import load_env
 from .docgen.lab_files import read_lab_file, write_lab_files
 from .docgen.qr import qr_payload, write_qr
 from .handshake import BorderGateway, HandshakeError
@@ -57,6 +58,7 @@ def run_pipeline(data_dir="data", out_dir="out", sample: str = "full", log=print
     log(f"{next(step):>2}. reset {out_dir}/ and seed {data_dir}/ ({sample} sample)")
     reset_out(out_dir)
     w = build_world(data_dir, sample=sample)
+    log("    document store: " + ("OFFLINE MODE (local file store)" if w.offline else "MongoDB Atlas"))
     set_pipeline_status(w, "running")  # set to "complete" at the very end
     batches = {b: get_batch(w.conn, b) for b in w.expected}
 
@@ -152,7 +154,7 @@ def run_pipeline(data_dir="data", out_dir="out", sample: str = "full", log=print
 
     chains = {j: l.verify_chain() for j, l in w.ledgers.items()}
     summary = {
-        "sample": sample, "rows": rows, "seconds": round(time.perf_counter() - t0, 1),
+        "sample": sample, "offline": w.offline, "rows": rows, "seconds": round(time.perf_counter() - t0, 1),
         "passed": sum(r["result"] == "PASS" for r in rows), "failed": sum(r["result"] == "FAIL" for r in rows),
         "all_as_expected": all(r["as_expected"] for r in rows),
         "shipments": len(shipments), "pdf_count": len(docs),
@@ -186,6 +188,7 @@ def print_table(summary: dict, out=sys.stdout) -> None:
               f"{'yes' if r['as_expected'] else 'NO':<11} {r['pdfs']:>4}  {r['reasons']}", file=out)
     print("-" * len(head), file=out)
     ok = all(not v["problems"] for v in summary["ledgers"].values())
+    print("document store: " + ("OFFLINE MODE (local file store)" if summary["offline"] else "MongoDB Atlas"), file=out)
     print(f"{summary['passed']} passed, {summary['failed']} failed, "
           f"{'all' if summary['all_as_expected'] else 'NOT all'} as expected | {summary['shipments']} shipments, "
           f"{summary['pdf_count']} PDFs | ledgers " + ", ".join(f"{j}: {v['blocks']} blocks" for j, v in summary["ledgers"].items())
@@ -236,6 +239,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default="out")
     ap.add_argument("--sample", default="full", choices=("core", "full"))
     args = ap.parse_args(argv)
+    load_env()
     data_dir, out_dir = Path(args.data), Path(args.out)
     existing = [p for p in [data_dir, *(out_dir / n for n in OUT_SUBDIRS)] if p.exists()]
     if existing and not args.yes:

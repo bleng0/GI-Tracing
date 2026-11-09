@@ -28,6 +28,7 @@ from reportlab.pdfgen import canvas
 from ..crypto import Node, canonical, sha256_hex
 from ..doc_store import signed_part
 from ..sql_store import get_batch
+from ..storage import ensure_index
 from .qr import qr_payload
 
 WATERMARK_TEXT = "SAMPLE / DEMONSTRATION. NOT AN OFFICIAL DOCUMENT"
@@ -46,8 +47,8 @@ TITLES = {
 
 def documents_collection(world):
     coll = world.store.get_collection("documents")
-    coll.create_index("doc_id")
-    coll.create_index("batch_id")
+    ensure_index(coll, "doc_id")
+    ensure_index(coll, "batch_id")
     return coll
 
 

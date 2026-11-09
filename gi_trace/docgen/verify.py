@@ -114,7 +114,10 @@ def verify_pdf(pdf_path, world, valid_chains: set | None = None) -> VerifyResult
 
 
 def main(argv=None) -> int:
+    from ..doc_store import load_env
     from ..seed import open_world
+
+    load_env()
 
     ap = argparse.ArgumentParser(description="Verify a generated PDF: VALID, TAMPERED or UNKNOWN.")
     ap.add_argument("pdf", nargs="+", help="PDF files, folders or wildcards (expanded here, for Windows shells)")

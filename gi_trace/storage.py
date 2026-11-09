@@ -56,6 +56,18 @@ def read_text(path: Path) -> str:
     return Path(path).read_text(encoding="utf-8-sig")
 
 
+def ensure_index(coll, keys, **kwargs) -> str | None:
+    """create_index, except on Atlas, where the pipeline's user may not create indexes:
+    a refusal (Unauthorized, code 13) is ignored and the indexes atlas_setup made are used."""
+    from pymongo.errors import OperationFailure
+    try:
+        return coll.create_index(keys, **kwargs)
+    except OperationFailure as e:
+        if e.code == 13:
+            return None
+        raise
+
+
 class DocStore(Protocol):
     def insert_one(self, document: dict) -> Any: ...
     def find(self, filter: dict | None = None, projection: dict | None = None) -> Any: ...

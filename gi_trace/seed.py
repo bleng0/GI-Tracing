@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import random
 from datetime import date, timedelta
 from pathlib import Path
@@ -39,7 +38,7 @@ from .crypto import (
     ARTISAN_COOP, BOTANICAL_LAB, CUSTOMS, GI_REGISTRY, TANNING_REGISTRY, Node, canonical,
     directory_of, sha256_hex,
 )
-from .doc_store import open_collection, open_store, signed_part, submit_certificate
+from .doc_store import is_offline, open_collection, open_store, signed_part, submit_certificate
 from .keystore import KeystoreError, load_ledger_keys, load_nodes, load_shares, save_keys, write_json
 from .ledger import Ledger
 from .ledger_io import attach, load_ledger
@@ -152,7 +151,7 @@ def build_world(data_dir=None, sample: str = "core") -> SimpleNamespace:
     world = SimpleNamespace(
         conn=conn, coll=coll, store=store, nodes=nodes, directory=directory_of(nodes.values()),
         ledgers=ledgers, shares=shares, lab_files=data.lab_files, expected=data.expected,
-        sample=sample, data_dir=paths.root if paths else None,
+        sample=sample, data_dir=paths.root if paths else None, offline=is_offline(store),
     )
     if paths:
         save_keys(paths.keys, nodes, ledgers, shares)
@@ -183,7 +182,8 @@ def open_world(data_dir) -> SimpleNamespace:
     or whose keys, ledgers, documents and SQL rows do not agree with each other."""
     paths = _paths(data_dir)
     required = [paths.manifest, paths.db]
-    if not os.environ.get("MONGO_URI"):
+    store = open_store(paths.docs)
+    if is_offline(store):
         required.append(paths.docs)
     for f in required:
         if not f.exists():
@@ -224,7 +224,6 @@ def open_world(data_dir) -> SimpleNamespace:
     batch_ids = [r[0] for r in conn.execute("SELECT batch_id FROM batches ORDER BY batch_id")]
     if batch_ids != sorted(sample_data(sample).expected):
         raise WorldError(f"the batches in {paths.db} are not the {sample} sample")
-    store = open_store(paths.docs)
     coll = open_collection(store)
     lab_files = {b: (paths.labfiles / f"{b}.csv").read_bytes()
                  for b in batch_ids if (paths.labfiles / f"{b}.csv").exists()}
@@ -234,6 +233,7 @@ def open_world(data_dir) -> SimpleNamespace:
         ledgers=ledgers, shares=shares, lab_files=lab_files,
         expected={b: failures.get(b) for b in batch_ids},
         sample=sample, data_dir=paths.root, pipeline=manifest.get("pipeline", "complete"),
+        offline=is_offline(store),
     )
     problems = world_problems(world)
     if problems:
