@@ -90,7 +90,8 @@ Check: three accounts can be created; wrong password five times locks the accoun
 ### Step 6. Dashboard shell and pages (4 h)
 1. Flask app on `127.0.0.1:5000`, login page, role-based menu, offline banner, CSRF token, `HttpOnly` and `SameSite=Strict` cookie.
 2. Overview, shipments, batches and certificates, documents with Verify, audit log, per the table in section 4.
-Check: each page shows the right data online and offline; each role sees only its pages.
+3. Offline snapshot: at the end of every online `run_all`, copy the Atlas documents and ledgers into `data/` once (written to a temporary folder, then swapped in), plus `python -m gi_trace.snapshot` to refresh it by hand. With Atlas unreachable the dashboard opens that copy and the banner reads "OFFLINE MODE: data as of <time of the last online run>". The copy replaces any earlier offline world: `data/` always holds the latest run.
+Check: each page shows the right data online and offline; each role sees only its pages; after an online run with Wi-Fi then turned off, the dashboard shows the same counts with the snapshot time in the banner.
 
 ### Step 7. Query console and ledger viewer (3 h)
 1. Query console (admin): collection picker (`certificates`, `documents`), JSON filter, projection, sort, limit 200, `maxTimeMS` 10 s, table and CSV output, four saved example queries. Operators `$where`, `$function`, `$accumulator`, `$out`, `$merge` refused.
@@ -117,11 +118,11 @@ Check: README steps take you from zero to a working dashboard in under 15 minute
 | 3 Ledger in Atlas | 3 |
 | 4 Housekeeping | 0.5 |
 | 5 Users and roles | 2 |
-| 6 Dashboard pages | 4 |
+| 6 Dashboard pages and offline snapshot | 5 |
 | 7 Query console and ledger viewer | 3 |
 | 8 Access-control tests | 2 |
 | 9 Guides and rehearsal | 2 |
-| **Total** | **about 18.7** |
+| **Total** | **about 19.7** |
 
 ## 7. Known limits
 
