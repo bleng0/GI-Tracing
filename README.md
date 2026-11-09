@@ -9,27 +9,38 @@ Himalayan hemp and Peshawari chappal batches moving between Nepal, India and Pak
 python -m venv .venv
 .venv\Scripts\activate            # Windows  (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
-python -m pytest                   # 118 tests, under 2 minutes
+python -m pytest                   # 165 tests, about 2 minutes; always offline, never touch Atlas
+python -m gi_trace.check_atlas     # Atlas reachable? connect, list collections, write and read one document
 python -m gi_trace.run_all         # whole pipeline on the 30-batch sample; asks before replacing data/ and out/
 python -m gi_trace.docgen.verify out\certificates       # VALID / TAMPERED / UNKNOWN per PDF
 python -m gi_trace.demo            # short in-memory walkthrough of the four mechanisms
 ```
 
-No database server is needed. The demo and tests keep everything in memory.
+**Online and offline.** `GI_MODE` (default `auto`) picks where documents and ledgers live:
+`auto` uses MongoDB Atlas (`ATLAS_WRITE_URI` in `.env`, written once by `python -m gi_trace.atlas_setup`)
+if it answers within 30 seconds; if it is unreachable or `ATLAS_WRITE_URI` is not set, it prints
+`OFFLINE MODE` and uses files under `data/`. A wrong password or malformed URI is an error, not
+offline mode. `atlas` never falls back; `offline` never tries Atlas. Data written offline stays
+local and is not copied to Atlas later, and a world seeded in one mode opens only in that mode. `run_all` prints which
+store it used. The demo and tests keep everything in memory and need no connection.
 `build_world(data_dir="data", sample="full")` seeds the 30-batch sample and saves it under `data/`
-(SQLite `gi_trace.db`, document store `documents.json`, `keys/`, `ledgers/`, `labfiles/`);
+(SQLite `gi_trace.db`, `keys/`, `labfiles/`, and offline also `documents.json` and `ledgers/`);
 `open_world("data")` reopens it in a later session. It re-verifies every ledger, cross-checks
 the ledgers against each other and against the documents, and refuses a world that does not add up.
 A world on disk saves itself on every write; only one process should write to it at a time
-(a second writer is refused rather than overwriting).
-To use a real MongoDB, set `MONGO_URI` (e.g. `mongodb://localhost:27017`);
-**seeding (and so `run_all`) clears the `gi_trace.certificates` and `gi_trace.documents` collections**,
-whatever `--data` directory is used, because they all share that one database. The tests ignore
-`MONGO_URI` and never touch MongoDB.
+(offline, a second writer is refused rather than overwriting; online nothing enforces this).
+Online, **seeding (and so `run_all`) clears the Atlas `certificates` and `documents` collections**,
+whatever `--data` directory is used. It never deletes ledger data: the pipeline's Atlas user cannot.
+So a second online `run_all` stops with "Atlas already holds ledgers". To start over, sign in to
+the Atlas website, open Data Explorer, database `gi_trace`, and in each of `ledger_blocks`,
+`ledger_heads` and `pending_signatures` delete all documents (filter `{}`). About 2 minutes.
+Delete the documents; do not drop the collections, because that also removes the unique indexes,
+which the pipeline's user cannot recreate. A world saved before the signed checkpoints were added
+(no `data/keys/checkpoint.json`) does not open; run `run_all` again.
 
 **Keys on disk are a demo convenience, not key custody.** `data/keys/` holds every node's
-private signing key and all six regulators' Shamir shares of each ledger's redaction trapdoor
-(the trapdoor itself is never written). In real use each share would be held by a different
+private signing key, the key that signs each ledger's checkpoint (never sent to Atlas), and all
+six regulators' Shamir shares of each ledger's redaction trapdoor (the trapdoor itself is never written). In real use each share would be held by a different
 regulator; here any three files in `data/keys/shares/` are enough to redact a ledger.
 
 `run_all` fills `out/`: `labfiles/` (raw lab CSVs), `certificates/` (PDFs: hemp lab assays,
@@ -56,6 +67,8 @@ signed by this system's own keys, not by a recognised certificate authority.
 | PDFs with JSON twins, QR codes, lab files, `verify` | `gi_trace/docgen/` | — |
 | Full pipeline CLI and summary report | `gi_trace/run_all.py` | — |
 | Persistence: document store, keys, ledgers | `gi_trace/storage.py`, `gi_trace/keystore.py`, `gi_trace/ledger_io.py` | — |
+| Atlas or offline store, connection check | `gi_trace/doc_store.py`, `gi_trace/check_atlas.py` | — |
+| Ledger store (files or Atlas), signed checkpoints, pending handshake signatures | `gi_trace/ledger_store.py` | — |
 
 ## Design decisions that differ from, or go beyond, the spec
 
@@ -75,13 +88,15 @@ signed by this system's own keys, not by a recognised certificate authority.
 
 ## Known limitations
 
-- Ledgers are Python objects saved to JSON files: no consensus, networking or crash recovery.
-  A ledger file is re-verified on load, but cutting blocks off its end is not detected
-  (a shorter chain is still a valid chain).
+- Ledgers are kept in Atlas (online) or JSON files (offline): no consensus or networking.
+  Every load re-verifies the chain and a signed checkpoint of its latest block, so blocks cut off
+  the end are detected. Rolling a ledger and its checkpoint back together to an earlier signed
+  state is not.
 - The trapdoor is reconstructed in one place to forge. A true threshold scheme would
   forge without ever rebuilding it.
-- No crash recovery between the destination MINT and the origin TRANSFERRED write
-  (MP-SATP uses backup gateways for this).
+- Handshake signatures are stored as they arrive, so a shipment interrupted before commit can
+  be finished after a restart without re-signing. There is still no crash recovery between the
+  destination MINT and the origin TRANSFERRED write (MP-SATP uses backup gateways for this).
 - ABPRE encryption of artisan pricing (Jia et al.) and the Redis transit-state cache
   (Li & Gu adaptation) are not implemented. The spec describes both but does not list
   them among the four mechanisms.
