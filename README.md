@@ -3,40 +3,151 @@
 Working prototype of *Multi-Jurisdictional Traceability for South Asian GI Crafts*:
 Himalayan hemp and Peshawari chappal batches moving between Nepal, India and Pakistan.
 
-## Run it
+## Set up (once, about 3 minutes, plus 5 for the optional tests)
 
-```bash
+Windows 10/11, Python 3.10 or newer (tested with 3.14). In **Command Prompt**, in the project folder:
+
+```bat
 python -m venv .venv
-.venv\Scripts\activate            # Windows  (macOS/Linux: source .venv/bin/activate)
+.venv\Scripts\activate
 pip install -r requirements.txt
-python -m pytest                   # 165 tests, about 2 minutes; always offline, never touch Atlas
-python -m gi_trace.check_atlas     # Atlas reachable? connect, list collections, write and read one document
-python -m gi_trace.run_all         # whole pipeline on the 30-batch sample; asks before replacing data/ and out/
-python -m gi_trace.docgen.verify out\certificates       # VALID / TAMPERED / UNKNOWN per PDF
-python -m gi_trace.demo            # short in-memory walkthrough of the four mechanisms
 ```
 
-**Online and offline.** `GI_MODE` (default `auto`) picks where documents and ledgers live:
-`auto` uses MongoDB Atlas (`ATLAS_WRITE_URI` in `.env`, written once by `python -m gi_trace.atlas_setup`)
-if it answers within 30 seconds; if it is unreachable or `ATLAS_WRITE_URI` is not set, it prints
-`OFFLINE MODE` and uses files under `data/`. A wrong password or malformed URI is an error, not
-offline mode. `atlas` never falls back; `offline` never tries Atlas. Data written offline stays
-local and is not copied to Atlas later, and a world seeded in one mode opens only in that mode. `run_all` prints which
-store it used. The demo and tests keep everything in memory and need no connection.
-`build_world(data_dir="data", sample="full")` seeds the 30-batch sample and saves it under `data/`
-(SQLite `gi_trace.db`, `keys/`, `labfiles/`, and offline also `documents.json` and `ledgers/`);
-`open_world("data")` reopens it in a later session. It re-verifies every ledger, cross-checks
-the ledgers against each other and against the documents, and refuses a world that does not add up.
-A world on disk saves itself on every write; only one process should write to it at a time
-(offline, a second writer is refused rather than overwriting; online nothing enforces this).
-Online, **seeding (and so `run_all`) clears the Atlas `certificates` and `documents` collections**,
-whatever `--data` directory is used. It never deletes ledger data: the pipeline's Atlas user cannot.
-So a second online `run_all` stops with "Atlas already holds ledgers". To start over, sign in to
-the Atlas website, open Data Explorer, database `gi_trace`, and in each of `ledger_blocks`,
-`ledger_heads` and `pending_signatures` delete all documents (filter `{}`). About 2 minutes.
-Delete the documents; do not drop the collections, because that also removes the unique indexes,
-which the pipeline's user cannot recreate. A world saved before the signed checkpoints were added
-(no `data/keys/checkpoint.json`) does not open; run `run_all` again.
+In PowerShell, `activate` is blocked by the default execution policy; run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use Command Prompt.
+
+Optional: `python -m pytest` runs 488 tests in about 5 minutes. They always run offline and never touch
+Atlas, `.env`, `data/` or `out/` (they work in temporary folders).
+
+**Atlas (online use only).** `.env` must hold `ATLAS_WRITE_URI` (the pipeline's user) and
+`ATLAS_READ_URI` (the dashboard's read-only user). Without them everything runs offline. To create them
+once (about 10 minutes):
+
+1. In the Atlas website, create a free M0 cluster, then under the project's Access Manager create an API
+   key with the Project Owner role.
+2. Put three lines in `.env` (a text file in the project folder): `ATLAS_PROJECT_ID=...` (Project
+   Settings), `ATLAS_PUBLIC_KEY=...` and `ATLAS_PRIVATE_KEY=...`.
+3. `python -m gi_trace.atlas_setup`. It adds this PC's public IP to the network access list, creates the
+   writer and read-only users, the collections and indexes, checks the permissions and ends with `DONE`.
+   It appends the two URIs to `.env` and never prints them.
+4. Delete the API key in Atlas and remove the three lines from `.env`.
+
+`python -m gi_trace.check_atlas` checks the connection: it connects, lists the collections, writes and
+reads one test document, and ends with `OK: Atlas reachable, write and read work`. **On a different
+network** (school, venue) Atlas refuses connections until you add that network's IP under Network Access
+in the Atlas website; run `check_atlas` there before the demo.
+
+**Dashboard accounts.** Create the three logins once; each command asks for the username, the role
+and a hidden password (8 or more characters). They are kept in `data/users.db`, which runs never replace.
+
+```bat
+python -m gi_trace.web.create_user
+```
+
+Answer `admin`, `employee` and `delivery` as the role in three runs.
+
+## Demo, online (MongoDB Atlas)
+
+1. `python -m gi_trace.check_atlas` must end with `OK: Atlas reachable ...`.
+2. Atlas must hold no ledgers from an earlier run (see "Starting Atlas over" below), otherwise step 3
+   stops with "Atlas already holds ledgers".
+3. `python -m gi_trace.run_all --yes` (about 15 s offline, longer online). It prints
+   `document store: MongoDB Atlas`, a table of 30 batches and
+   `21 passed, 9 failed, all as expected | 22 shipments, 80 PDFs | ledgers NP: 79 blocks, IN: 45 blocks, PK: 69 blocks (all chains valid)`.
+   At the end it copies the Atlas data into `data/` (the offline snapshot, below).
+4. `python -m gi_trace.web`, then open http://127.0.0.1:5000 and sign in. No yellow
+   OFFLINE banner means the pages read Atlas through the read-only user. The Overview shows
+   30 batches, 22 verified, 8 rejected, 22 shipments, 80 documents (HEMP-NP-0004 is counted as
+   verified: its certificates passed; only its second export was refused, which makes it one of the
+   9 failures in the `run_all` table).
+
+## Demo, offline (no Wi-Fi)
+
+Two ways, both with the same dashboard:
+
+- **Snapshot of the last online run** (best for showing "the same data, offline"): after an online
+  `run_all`, turn Wi-Fi off and run only `python -m gi_trace.web`. It waits up to 30 s for Atlas, prints
+  `Data: OFFLINE (local copy)`, and every page shows
+  `OFFLINE MODE: data as of <time of the last online run> (copy taken after the last online run)`.
+  The counts are the same as online. `python -m gi_trace.snapshot` refreshes this copy by hand while online.
+- **A fresh offline run:** `set GI_MODE=offline` (PowerShell: `$env:GI_MODE="offline"`), then
+  `python -m gi_trace.run_all --yes` and `python -m gi_trace.web`. The run prints
+  `document store: OFFLINE MODE (local file store)` and the same 21 / 9 table; the banner reads
+  `OFFLINE MODE: local data from the last offline run.` This replaces the snapshot in `data/`.
+  `GI_MODE` stays set in that window: undo it with `set GI_MODE=` (PowerShell: `Remove-Item Env:GI_MODE`)
+  or open a new window before running online again.
+  With `GI_MODE=auto` (the default) and Wi-Fi off, `run_all` waits 30 s, prints
+  `OFFLINE MODE: Atlas not reachable within 30 s`, and does the same.
+
+If Atlas stops answering while the dashboard runs, it switches to the snapshot by itself and tries
+Atlas again every five minutes.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `python -m gi_trace.run_all [--yes] [--sample core]` | the whole pipeline; asks before replacing `data/` and `out/` |
+| `python -m gi_trace.web [--port 5000]` | the dashboard on http://127.0.0.1:5000 (this PC only); Ctrl+C stops it |
+| `python -m gi_trace.web.create_user` | add a dashboard account (hidden password) |
+| `python -m gi_trace.snapshot` | copy the Atlas data into `data/` for offline use (run_all does this itself) |
+| `python -m gi_trace.check_atlas` | Atlas reachable? write and read one test document |
+| `python -m gi_trace.docgen.verify out\certificates` | VALID / TAMPERED / UNKNOWN per PDF |
+| `python -m gi_trace.demo` | short in-memory walkthrough of the four mechanisms |
+| `python -m pytest` | 488 tests, offline |
+
+`GI_MODE` picks where documents and ledgers live: `auto` (default) uses Atlas if it answers within
+30 seconds and the local files otherwise; `atlas` never falls back; `offline` never tries Atlas. A wrong
+password or malformed URI in `.env` is an error, not offline mode.
+
+## Dashboard
+
+Pages per role (PLAN.md section 4). Every route checks the role: other roles get "Not allowed" (403),
+signed-out visitors go to the sign-in page. Five wrong passwords lock an account for 5 minutes.
+Restarting the dashboard signs everyone out.
+
+| Page | admin | employee | delivery |
+| --- | --- | --- | --- |
+| Overview (counts, charts; order values for admin only) | yes | yes | |
+| Batches and certificates | yes | yes | |
+| Shipments | yes | yes | yes |
+| Documents, download (waybills, which print prices: admin only) | yes | yes | |
+| Verify a PDF or pasted QR text | yes | yes | yes |
+| Query console | yes | | |
+| Ledger viewer and chain check | yes | | |
+| Audit log, users | yes | | |
+
+**Query console.** Pick `certificates` or `documents`, type a JSON filter, optional projection and sort
+(`{"field": 1}` or `-1`) and a limit of 1 to 200, then Run (table) or Download CSV. Four examples fill
+the form. Read only. Refused: `$where`, `$function`, `$accumulator`, `$out`, `$merge` (anywhere, any
+letter case, also as text values such as `"$out"`). Atlas stops a query after 10 s; offline each query
+runs in its own Python process that is stopped after 10 s (about 1 s extra to start on Windows). CSV cells
+that a spreadsheet would treat as a formula start with an apostrophe.
+
+**Ledger viewer.** Choose NP, IN or PK. It reads the blocks from storage on every visit (about 1 s for 80
+blocks) and shows "Chain valid" or each problem, with the affected blocks marked ✗.
+
+## What is in data/ and out/
+
+- `data/` is the latest world: `gi_trace.db` (SQLite), `keys/`, `labfiles/`, `documents.json` and
+  `ledgers/` (the offline data, or after an online run the offline copy of Atlas), `world.json` (what it is and, after an online run, `snapshot_at`),
+  and `users.db` (accounts and audit log). Keys on disk are a demo convenience, see below.
+- `data.new/` is where `run_all` builds the next world. It replaces `data/` only when the whole run has
+  succeeded, so a failed run leaves the previous world, and the dashboard showing it, unchanged; the
+  dashboard then says a run "is in progress or was interrupted". The next `run_all` removes a leftover
+  `data.new/`; you can also delete it by hand.
+- `out/` holds the PDFs, QR codes, lab files and `reports/summary.html`. It is emptied at the start of a
+  run, so after a failed run downloads give "Not found" until a run succeeds.
+
+## Starting Atlas over
+
+Seeding clears the Atlas `certificates` and `documents` collections, but the pipeline's user cannot
+delete ledger data, so a second online `run_all` stops with "Atlas already holds ledgers". To start over
+(about 2 minutes): sign in to the Atlas website, open Data Explorer, database `gi_trace`, and in each of
+`ledger_blocks`, `ledger_heads` and `pending_signatures` delete all documents (filter `{}`). Delete the
+documents; do not drop the collections, because that also removes the unique indexes, which the
+pipeline's user cannot recreate.
+
+## Keys and generated files
 
 **Keys on disk are a demo convenience, not key custody.** `data/keys/` holds every node's
 private signing key, the key that signs each ledger's checkpoint (never sent to Atlas), and all
@@ -69,6 +180,11 @@ signed by this system's own keys, not by a recognised certificate authority.
 | Persistence: document store, keys, ledgers | `gi_trace/storage.py`, `gi_trace/keystore.py`, `gi_trace/ledger_io.py` | — |
 | Atlas or offline store, connection check | `gi_trace/doc_store.py`, `gi_trace/check_atlas.py` | — |
 | Ledger store (files or Atlas), signed checkpoints, pending handshake signatures | `gi_trace/ledger_store.py` | — |
+| Dashboard: pages, roles, CSRF, offline switch | `gi_trace/web/app.py`, `gi_trace/web/data.py` | — |
+| Accounts, lockout, audit log | `gi_trace/web/users.py`, `gi_trace/web/create_user.py` | — |
+| Query console (offline worker) and ledger viewer | `gi_trace/web/query.py`, `gi_trace/web/query_worker.py`, `gi_trace/web/ledger_view.py` | — |
+| Offline snapshot of the Atlas data | `gi_trace/snapshot.py` | — |
+| Access-control matrix and break-it check | `tests/test_roles.py`, `tests/test_break_it.py` | — |
 
 ## Design decisions that differ from, or go beyond, the spec
 
@@ -101,3 +217,9 @@ signed by this system's own keys, not by a recognised certificate authority.
   (Li & Gu adaptation) are not implemented. The spec describes both but does not list
   them among the four mechanisms.
 - THC limits (0.3 %), tariff rates, GI codes and names in `seed.py` are placeholders.
+- Dashboard: Verify reads a QR code only as pasted text (scan it with a phone app); there is no QR image
+  decoder. Restarting the dashboard signs everyone out (a new session key each start). A user's role is
+  read at sign-in, so a role changed later applies from the next sign-in.
+- Offline query-console queries run in a separate Python process: about 1 s to start on Windows.
+- `check_mongo.py` and `setup_mongodb.ps1` are from the earlier local-MongoDB setup and are not part of
+  the Atlas demo.

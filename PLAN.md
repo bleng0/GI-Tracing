@@ -76,7 +76,7 @@ Check: `run_all` online fills Atlas (21 passed, 9 failed, same as before); the s
 3. Handshake signatures saved to `pending_signatures`, so a restart can finish an interrupted shipment. Fixes issue 4.
 4. Re-running the oracle on a passed batch adds nothing. Fixes issue 5.
 Check (new tests): delete the last block, then loading fails; kill the program mid-handshake, restart, shipment completes without re-signing; run the oracle twice, block count unchanged; all earlier tests pass.
-Known consequence: the writer cannot delete ledger data by design, so resetting Atlas ledgers means dropping the four ledger collections in the Atlas website (2 minutes, written in the README).
+Known consequence: the writer cannot delete ledger data by design, so resetting Atlas ledgers means deleting all documents in `ledger_blocks`, `ledger_heads` and `pending_signatures` in the Atlas website, not dropping the collections (2 minutes, written in the README).
 
 ### Step 4. Housekeeping (30 min)
 1. `git init`, `.gitignore` check, first commit.
