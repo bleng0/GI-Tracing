@@ -133,3 +133,112 @@ Check: README steps take you from zero to a working dashboard in under 15 minute
 3. PDFs are signed with this project's own keys, so they prove tamper-evidence inside this system only.
 4. Offline data is not merged back into Atlas.
 5. Not included: ABPRE pricing encryption and the Redis cache from the handoff document (about 4 h each if evaluators expect them).
+
+## 8. Open items after Step 9: plan (Steps 10 to 18)
+
+Same rules as section 5: one step at a time, each with a Check; the next step starts only when the
+Check passes; one commit per step. Never read or print `.env`; tests and break-it runs work in temporary
+folders, never in `data/` or `out/`.
+
+**How every step runs**
+1. **Test writer** (subagent, fresh context, sees only this section and the code it tests): writes the
+   step's tests first, from the Check below. They must fail before the change.
+2. **Build** (Claude): the smallest change that makes them pass, in the existing style.
+3. **Full suite + stress** (Claude): all tests on Linux, plus the step's stress test (threads).
+4. **Reviewer** (subagent, report only): checks the step against its Check, looks for security and
+   correctness bugs, and mutation-tests the new tests (breaks the code in a temporary copy and confirms
+   a test fails). Every confirmed finding is fixed with a test.
+5. **You, only where marked "You"**: the parts that need Windows, a phone, Atlas's website or your eyes.
+   Collected into one Windows rehearsal script in Step 17, except where a step says otherwise.
+
+### Step 10. Small fixes (30 min)
+1. `gi_trace/web/__init__.py` docstring describes what the package holds now.
+2. `test_a_locked_account_does_not_answer_faster` is timing-based and failed once under parallel load:
+   compare medians of 7 samples instead of minima of 3, keeping the property it checks.
+Check: the timing test passes 20 runs in a row under `-n 2`; full suite passes.
+
+### Step 11. Sessions that survive a restart, role checked on the server (open items 3 and 6, 2.5 h)
+1. A `sessions` table in `data/users.db`: SHA-256 of the session id (never the id itself), username,
+   created, last seen. Idle expiry 8 h, absolute 24 h. Signing out deletes the row.
+2. The cookie-signing key is created once and kept in `users.db` (which runs never replace), so a
+   restart keeps everyone signed in.
+3. Every request reads the role (and the lock state) from the `users` table, not from the cookie, so a
+   changed role or a locked account takes effect on the next request.
+Check (tests): restart the app (new `create_app`, same `users.db`): still signed in; sign out, then a
+copied cookie is refused on GET and POST; change a user's role in the table: next request uses it;
+an expired session goes to sign-in; no session id appears in `users.db`. Break-it gains two
+mutations (role from cookie again; sign-out not deleting the row). Stress: 16 threads signing in, out
+and browsing at once, no wrong status. **You:** restart the dashboard and reload: still signed in (2 min).
+
+### Step 12. A failed run leaves `out/` as it was (open item 1, 1.5 h)
+1. `run_all` writes PDFs, QR codes, lab files and the report into `out.new/`, and swaps them into
+   `out/` only after the whole run (and the data swap) succeeded, like `data.new/`.
+2. Documents register their final path under `out/`, not `out.new/`.
+3. If Windows holds a file in `out/` (a PDF open in a viewer), the run stops with a clear message
+   naming the file and both `data/` and `out/` keep the previous run.
+Check (tests): a run made to fail after the PDF step leaves `out/` byte-for-byte unchanged and every
+download still returns 200; a successful run replaces it; registered paths point into `out/`.
+**You:** open one PDF from `out\certificates` in Edge, run `run_all`, see the message, close the PDF,
+run again (5 min).
+
+### Step 13. No half-replaced data on screen during an online run (open item 2, 2.5 h)
+1. While a run is in progress (`data.new/` exists) an Atlas-connected dashboard shows the offline copy
+   of the previous run instead of Atlas, with the banner "A run is in progress: showing the copy from
+   <time>". When the run is published it goes back to Atlas. If there is no earlier copy (the very
+   first online run) the banner says the data may be incomplete.
+2. Remaining gap, documented: a request that started reading Atlas just before the run began.
+Check (tests, FakeAtlas): a run paused right after it cleared the Atlas collections: pages show the
+previous counts and the banner; after it finishes, the new data online. Stress: pages requested from
+8 threads all through a real run never show a partial count (always the old or the new totals).
+
+### Step 14. Verify reads a QR code from a photo or screenshot (open item 4, 2 h)
+1. Verify accepts a PNG or JPEG (up to 10 MB, at most 40 megapixels), decodes the QR with `zxing-cpp`
+   (a 1 MB wheel; a Windows build for Python 3.14 exists) and checks the text exactly as pasted text is.
+2. No QR found, or several, or an unreadable image: a plain message, never an error page.
+Check (tests): every QR PNG the pipeline writes verifies VALID; a QR with an edited block hash is
+TAMPERED; junk bytes, a non-image, an oversized "decompression bomb" PNG and a PDF renamed .png are
+refused with a message; same roles as Verify. **You:** photograph a QR code on screen with your phone,
+upload the photo: VALID (5 min).
+
+### Step 15. `python -m gi_trace.check_offline` (open item 5, 1 h)
+1. Proves the demo works with no connection: opens `data/` offline, re-checks every chain, opens each
+   dashboard page as a temporary admin (random password, temporary accounts file), verifies three PDFs,
+   and prints `OK: the demo works with no connection` or what failed. Any network use during the
+   check is an error (sockets are blocked in-process).
+2. README and DEMO.md "Before you start" use it.
+Check (tests): OK on an offline world and on a snapshot world; exit 1 with the reason on a broken
+world, a missing `out/` and an edited ledger; no file under `data/` changes.
+
+### Step 16. Ledger viewer under 0.3 s on a repeat visit (open item 7, 1 h)
+1. Cache the chain check per ledger, keyed by the SHA-256 of the stored blocks and the checkpoint as
+   read now. The blocks are still read on every visit, so an edit is seen at once; only an unchanged
+   ledger skips the expensive signature and chameleon checks.
+Check (tests): second visit at least 4x faster than the first; an edit made between visits is flagged
+on the next one; 8 threads on the ledger pages give the same results as one. Stress p50 < 0.3 s.
+
+### Step 17. Windows and Atlas rehearsal (1 h for Claude; about 20 min for you)
+1. Update `out\rehearse_windows.ps1` and `out\rehearse_online.ps1` to cover Steps 10 to 16, and add a
+   genuinely slow Atlas query (heavy `$expr` arithmetic) that real Atlas must stop with
+   "Atlas stopped the query after 10 s" (open from the Step 7 rehearsal).
+2. **You:** empty the three Atlas ledger collections (BULK, Bulk delete documents), run both scripts,
+   reply "done"; Claude reads the log. Then empty the ledgers again and run `run_all` in the main folder.
+Check: every line of both scripts PASS on Windows, including the Atlas time limit.
+
+### Step 18. Guides and tidy-up (1 h)
+1. README, DEMO.md and section 7 of this file updated for Steps 10 to 17; test count current.
+2. Housekeeping, asking once: permission to delete the `stale-*` git lock files and `out\rehearse_*`;
+   you delete `C:\Users\bruce\gi-rehearse` yourself.
+Check: `tests/test_docs.py` passes; a reviewer subagent checks every claim in the guides against the code.
+
+| Step | Claude | You |
+| --- | --- | --- |
+| 10 Small fixes | 0.5 h | |
+| 11 Sessions | 2.5 h | 2 min |
+| 12 `out/` staging | 1.5 h | 5 min |
+| 13 Run in progress | 2.5 h | |
+| 14 QR images | 2 h | 5 min |
+| 15 `check_offline` | 1 h | |
+| 16 Ledger cache | 1 h | |
+| 17 Rehearsal | 1 h | 20 min |
+| 18 Guides | 1 h | 2 min |
+| **Total** | **about 13 h** | **about 35 min** |
