@@ -3,7 +3,7 @@
 Working prototype of *Multi-Jurisdictional Traceability for South Asian GI Crafts*:
 Himalayan hemp and Peshawari chappal batches moving between Nepal, India and Pakistan.
 
-## Set up (once, about 3 minutes, plus 5 for the optional tests)
+## Set up (once, about 3 minutes, plus 9 for the optional tests)
 
 Windows 10/11, Python 3.10 or newer (tested with 3.14). In **Command Prompt**, in the project folder:
 
@@ -16,7 +16,7 @@ pip install -r requirements.txt
 In PowerShell, `activate` is blocked by the default execution policy; run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use Command Prompt.
 
-Optional: `python -m pytest` runs 488 tests in about 5 minutes. They always run offline and never touch
+Optional: `python -m pytest` runs 488 tests in about 9 minutes on Windows. They always run offline and never touch
 Atlas, `.env`, `data/` or `out/` (they work in temporary folders).
 
 **Atlas (online use only).** `.env` must hold `ATLAS_WRITE_URI` (the pipeline's user) and
