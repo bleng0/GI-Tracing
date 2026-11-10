@@ -112,7 +112,9 @@ def test_interrupted_run_is_flagged(tmp_path, monkeypatch, capsys):
 def test_a_failed_run_leaves_the_previous_world_in_place(tmp_path, monkeypatch):
     import gi_trace.run_all as ra
     run_pipeline(tmp_path / "data", tmp_path / "out", sample="core", log=lambda *_: None)
-    before = [b.hash for b in open_world(tmp_path / "data").ledgers["NP"].blocks]
+    w = open_world(tmp_path / "data")
+    before = [b.hash for b in w.ledgers["NP"].blocks]
+    w.conn.close()  # Windows will not move a file that has an open handle
     (tmp_path / "data" / "users.db").write_bytes(b"accounts")  # never touched by a run
 
     def boom(*a, **k):
@@ -122,6 +124,7 @@ def test_a_failed_run_leaves_the_previous_world_in_place(tmp_path, monkeypatch):
         run_pipeline(tmp_path / "data", tmp_path / "out", sample="core", log=lambda *_: None)
     w = open_world(tmp_path / "data")
     assert w.pipeline == "complete" and [b.hash for b in w.ledgers["NP"].blocks] == before
+    w.conn.close()
     monkeypatch.undo()
     run_pipeline(tmp_path / "data", tmp_path / "out", sample="core", log=lambda *_: None)
     assert not (tmp_path / "data.new").exists() and not (tmp_path / "data" / ".previous").exists()
