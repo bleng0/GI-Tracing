@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<p>{% for l in ledgers %}<a href="{{ url_for('ledger', j=l) }}"{% if l == j %} aria-current="page"{% endif %}>{{ l }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% if info.problems %}
+<section class="result tampered"><h2>Chain NOT valid: {{ info.problems|length }} problem{{ "" if info.problems|length == 1 else "s" }}</h2>
+<ul>{% for p in info.problems %}<li>{{ p }}</li>{% endfor %}</ul></section>
+{% else %}
+<section class="result valid"><h2>Chain valid</h2><p>{{ info.blocks|length }} blocks: every link, chameleon digest, member signature and redaction record checks, and the last block matches the signed checkpoint.</p></section>
+{% endif %}
+<p>Read from storage just now. Page {{ page }} of {{ pages }}.
+{% if page > 1 %}<a href="{{ url_for('ledger', j=j, page=page - 1) }}">Previous</a>{% endif %}
+{% if page < pages %}<a href="{{ url_for('ledger', j=j, page=page + 1) }}">Next</a>{% endif %}</p>
+<div class="scroll"><table class="results">
+<tr><th>#</th><th>Time (UTC)</th><th>Type</th><th>Signer</th><th>Hash / previous</th><th>Payload</th></tr>
+{% for b in blocks %}<tr{% if b.index in info.bad %} class="rejected"{% endif %}><td class="num">{{ b.index }}{% if b.index in info.bad %} ✗{% endif %}</td><td>{{ b.timestamp }}</td><td>{{ b.tx_type }}</td><td>{{ b.signer }}</td>
+<td><code>{{ b.hash }}</code><br><code class="muted">{{ b.prev_hash }}</code></td><td><code>{{ b.payload }}</code></td></tr>
+{% else %}<tr><td colspan="6">No blocks.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

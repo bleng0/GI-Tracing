@@ -93,6 +93,19 @@ class FileLedgerStore:
     def load(self, ledger: Ledger) -> Ledger:
         return load_ledger(self._ledger_path(ledger.jurisdiction), ledger)
 
+    def raw_blocks(self, j: str) -> list:
+        """The stored blocks as they are, unverified (for the ledger viewer)."""
+        try:
+            data = json.loads(read_text(self._ledger_path(j)))
+            blocks = data["blocks"]
+        except FileNotFoundError:
+            raise LedgerError(f"the {j} ledger file is missing") from None
+        except (OSError, ValueError, KeyError, TypeError) as e:  # OSError: locked (Windows) or not a file
+            raise LedgerError(f"the {j} ledger file cannot be read: {type(e).__name__}") from None
+        if not isinstance(blocks, list):
+            raise LedgerError(f"the {j} ledger file has no list of blocks")
+        return blocks
+
     def check_checkpoint(self, ledger: Ledger) -> None:
         path = self._head_path(ledger.jurisdiction)
         try:
@@ -100,7 +113,7 @@ class FileLedgerStore:
         except FileNotFoundError:
             head = None
         except ValueError as e:
-            raise LedgerError(f"corrupt checkpoint file {path}: {e}") from e
+            raise LedgerError(f"corrupt checkpoint file {path.name}: {e}") from e
         check_checkpoint(ledger, head, self.key.public_key)
 
     def attach(self, ledger: Ledger, save_now: bool = True) -> None:
@@ -155,6 +168,16 @@ class AtlasLedgerStore:
         except (ValueError, KeyError, TypeError, AttributeError) as e:
             raise LedgerError(f"cannot read the {j} ledger from Atlas: {e}") from e
         return verify_loaded(ledger, blocks, f"the {j} ledger in Atlas")
+
+    def raw_blocks(self, j: str) -> list:
+        """The stored blocks as they are, unverified (for the ledger viewer)."""
+        from pymongo.errors import ConnectionFailure, PyMongoError
+        try:
+            return list(self.blocks.find({"jurisdiction": j}, {"_id": 0, "jurisdiction": 0, "dedupe_key": 0}).sort("index", 1))
+        except ConnectionFailure:
+            raise  # the dashboard switches to the offline copy
+        except PyMongoError as e:
+            raise LedgerError(f"Atlas refused to read the {j} ledger: {type(e).__name__}") from None
 
     def check_checkpoint(self, ledger: Ledger) -> None:
         check_checkpoint(ledger, self.heads.find_one({"jurisdiction": ledger.jurisdiction}, {"_id": 0}),

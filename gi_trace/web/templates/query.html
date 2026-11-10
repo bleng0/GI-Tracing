@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<p>Read-only search of <code>certificates</code> or <code>documents</code>. Filter, projection and sort are JSON objects.
+Up to {{ max_limit }} rows, stopped after {{ seconds }} s. Not allowed: $where, $function, $accumulator, $out, $merge.</p>
+<h2>Examples</h2>
+<ul>{% for e in examples %}<li><a href="{{ url_for('query', example=loop.index0) }}">{{ e.title }}</a></li>{% endfor %}</ul>
+{% if error %}<p class="flash" role="alert">Query refused: {{ error }}</p>{% endif %}
+<form method="post" action="{{ url_for('query') }}" class="query">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label>Collection <select name="collection">{% for c in collections %}<option{% if c == form.collection %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+  <label>Filter <textarea name="filter" rows="3" spellcheck="false">{{ form.filter }}</textarea></label>
+  <label>Projection (optional) <textarea name="projection" rows="2" spellcheck="false">{{ form.projection }}</textarea></label>
+  <label>Sort (optional) <textarea name="sort" rows="1" spellcheck="false">{{ form.sort }}</textarea></label>
+  <label>Limit (1 to {{ max_limit }}) <input name="limit" type="number" min="1" max="{{ max_limit }}" value="{{ form.limit }}"></label>
+  <p><button type="submit" name="output" value="table">Run</button> <button type="submit" name="output" value="csv">Download CSV</button></p>
+</form>
+{% if result %}
+<h2>{{ result.rows|length }} row{{ "" if result.rows|length == 1 else "s" }}</h2>
+<div class="scroll"><table class="results">
+<tr>{% for c in result.columns %}<th>{{ c }}</th>{% endfor %}</tr>
+{% for row in result.rows %}<tr>{% for v in row %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}
+</table></div>
+{% endif %}
+{% endblock %}

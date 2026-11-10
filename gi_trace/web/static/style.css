@@ -35,3 +35,7 @@ button { cursor: pointer; }
 .result.tampered { background: #ffebe9; }
 .result.unknown { background: #fff8c5; }
 .muted { color: var(--muted); }
+form.query { display: grid; gap: .75rem; max-width: 48rem; }
+select { font: inherit; padding: .4rem .5rem; }
+.scroll { overflow-x: auto; }
+table.results td { max-width: 32rem; overflow-wrap: anywhere; }

@@ -20,13 +20,13 @@ from functools import wraps
 from pathlib import Path
 
 from pymongo.errors import ConnectionFailure
-from flask import Flask, abort, flash, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, Response, abort, flash, redirect, render_template, request, send_file, session, url_for
 
 from ..crypto import sha256_hex
 from ..docgen.verify import verify_pdf, verify_qr
 from ..seed import staging_dir
 from ..storage import mtime_ns
-from . import data
+from . import data, ledger_view, query
 from .users import DEFAULT_DB, UserStore
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +37,7 @@ STAFF = (ADMIN, EMPLOYEE)
 PAGES = [
     ("overview", "Overview", STAFF), ("batches", "Batches", STAFF), ("shipments", "Shipments", ALL),
     ("documents", "Documents", STAFF), ("verify", "Verify", ALL),
+    ("query", "Query console", (ADMIN,)), ("ledger", "Ledger", (ADMIN,)),
     ("audit", "Audit log", (ADMIN,)), ("users", "Users", (ADMIN,)),
 ]
 ROLES_FOR = {endpoint: roles for endpoint, _, roles in PAGES}
@@ -318,6 +319,55 @@ def create_app(data_dir=ROOT / "data", out_dir=ROOT / "out", users_db=DEFAULT_DB
             else:
                 flash("Choose a PDF or paste the text of a QR code.")
         return render_template("verify.html", title="Verify a document or QR code", result=result)
+
+    @app.route("/query", methods=["GET", "POST"], endpoint="query")
+    @allowed("query")
+    def query_console():
+        world = world_or_none()
+        if world is None:
+            return no_data()
+        form = {"collection": "certificates", "filter": "{}", "projection": "", "sort": "",
+                "limit": str(query.DEFAULT_LIMIT)}
+        example = request.args.get("example")
+        if request.method == "GET" and example is not None:
+            if not (example.isascii() and example.isdigit() and len(example) < 4 and int(example) < len(query.EXAMPLES)):
+                abort(404)
+            form.update({k: str(v) for k, v in query.EXAMPLES[int(example)].items() if k in form})
+        result, error = None, None
+        if request.method == "POST":
+            form = {k: request.form.get(k, "") for k in form}
+            try:
+                q = query.parse(form)
+                columns, cells = query.table(query.run(world, q))
+            except query.QueryError as e:
+                error = str(e)
+            else:
+                if request.form.get("output") == "csv":
+                    return Response("\ufeff" + query.to_csv(columns, cells), mimetype="text/csv",
+                                    headers={"Content-Disposition": f'attachment; filename="{q.collection}.csv"'})
+                result = {"columns": columns, "rows": [[query.cell_text(v) for v in row] for row in cells]}
+        page = render_template("query.html", title="Query console", form=form, result=result, error=error,
+                               examples=query.EXAMPLES, collections=query.COLLECTIONS, max_limit=query.MAX_LIMIT,
+                               seconds=query.MAX_TIME_MS // 1000)
+        return page, (400 if error else 200)
+
+    @app.route("/ledger")
+    @allowed("ledger")
+    def ledger():
+        world = world_or_none()
+        if world is None:
+            return no_data()
+        j = request.args.get("j", "NP")
+        if j not in world.ledgers:
+            abort(404)
+        raw_page = request.args.get("page", "1")
+        info = ledger_view.inspect(world, j)
+        pages = max(1, -(-len(info["blocks"]) // ledger_view.PAGE_SIZE))
+        number = min(int(raw_page), pages) if raw_page.isascii() and raw_page.isdigit() and len(raw_page) < 7 and int(raw_page) > 0 else 1
+        start = (number - 1) * ledger_view.PAGE_SIZE
+        return render_template("ledger.html", title=f"Ledger {j}", j=j, ledgers=sorted(world.ledgers),
+                               info=info, blocks=info["blocks"][start:start + ledger_view.PAGE_SIZE],
+                               page=number, pages=pages)
 
     @app.route("/audit")
     @allowed("audit")
