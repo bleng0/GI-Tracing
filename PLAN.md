@@ -52,6 +52,8 @@ Added this session: `gi_trace/atlas_setup.py` and `tests/test_atlas_setup.py` (9
 | Ledger viewer and chain check | yes | no | no |
 | Audit log, user list | yes | no | no |
 
+Customs waybill PDFs print order prices, so only admin may download them (employees see the row, not the file).
+
 Every route checks the role; anything else gets 403, and logged-out visitors go to the login page.
 
 ## 5. Steps (each has a check; do not start the next until it passes)
