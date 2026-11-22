@@ -1,0 +1,8 @@
+{
+ "complete": true,
+ "format": 1,
+ "pipeline": "complete",
+ "sample": "full",
+ "snapshot_at": "2026-11-22T08:07:33+00:00",
+ "store": "atlas"
+}

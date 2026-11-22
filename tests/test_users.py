@@ -299,6 +299,6 @@ def test_odd_input_is_refused_not_crashed(db):
         store.create_user("ok-name", "admin", None)
 
 
-def test_default_database_is_the_projects_data_folder():
+def test_default_database_is_the_tracked_accounts_folder():
     from pathlib import Path
-    assert users.DEFAULT_DB == Path(users.__file__).resolve().parents[2] / "data" / "users.db"
+    assert users.DEFAULT_DB == Path(users.__file__).resolve().parents[2] / "accounts" / "users.db"

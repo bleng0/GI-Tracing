@@ -1,0 +1,67 @@
+{
+ "COOP-IN-HEMP": {
+  "jurisdiction": "IN",
+  "private_key": "8896713e4f7edcdf078ee3ed3599d40f94c632490cf77d554e6626f55cfe2694",
+  "role": "ARTISAN_COOP"
+ },
+ "COOP-NP-HEMP": {
+  "jurisdiction": "NP",
+  "private_key": "0a55985b6540986436fc4c849cad471c3ab9a4fb8092e4460f8c73702a8bb17b",
+  "role": "ARTISAN_COOP"
+ },
+ "COOP-PK-CHAPPAL": {
+  "jurisdiction": "PK",
+  "private_key": "5ef4b7b070704744495f26b7c6ce3d3286044694198c5ea778d7fb74a90a6307",
+  "role": "ARTISAN_COOP"
+ },
+ "CUSTOMS-IN": {
+  "jurisdiction": "IN",
+  "private_key": "30f728c40df4760abb599afa5d430a9e567a40f03f78f1cb7e3f617264084e0b",
+  "role": "CUSTOMS"
+ },
+ "CUSTOMS-NP": {
+  "jurisdiction": "NP",
+  "private_key": "ce546fd02c23973e5a885508edcd8a9b9bb22636391fad5a7a6f5bf91e4903e2",
+  "role": "CUSTOMS"
+ },
+ "CUSTOMS-PK": {
+  "jurisdiction": "PK",
+  "private_key": "a5943ac0e536cfed340451cb34b63622157c4111fa2dd38d24b1daa556616f32",
+  "role": "CUSTOMS"
+ },
+ "GI-REG-IN": {
+  "jurisdiction": "IN",
+  "private_key": "d1a347c6f541e0ca5d4c5a6d97cde0bc209d2bd7ee5d2f2c4a1dadd150d16cab",
+  "role": "GI_REGISTRY"
+ },
+ "GI-REG-NP": {
+  "jurisdiction": "NP",
+  "private_key": "334da35342a68a98864b3199a50ce5c0d87922f675675cd0aee61ff2570d7b34",
+  "role": "GI_REGISTRY"
+ },
+ "GI-REG-PK": {
+  "jurisdiction": "PK",
+  "private_key": "49cffbd4360f3a47571c55d1aae53694a82b7002da0645141c192f2133b91c0e",
+  "role": "GI_REGISTRY"
+ },
+ "LAB-IN": {
+  "jurisdiction": "IN",
+  "private_key": "fd434451cc4194070db55c34a8b086ca11808d7cc7aebd879173f0073ff773d5",
+  "role": "BOTANICAL_LAB"
+ },
+ "LAB-NP": {
+  "jurisdiction": "NP",
+  "private_key": "df8e9846ebfb37661b4c3c7c4d331077f2c963a5e38a0874dedaec0f48dcc159",
+  "role": "BOTANICAL_LAB"
+ },
+ "LAB-PK": {
+  "jurisdiction": "PK",
+  "private_key": "0fa16f1f41451a943319a5cc80ba8cae2a431876f90d33e7d23fdbe910a58359",
+  "role": "BOTANICAL_LAB"
+ },
+ "TANNERY-REG-PK": {
+  "jurisdiction": "PK",
+  "private_key": "8b1e0090a99524fb34219b66e76909eb08c688cde354ff40f93a601a9e4cb157",
+  "role": "TANNING_REGISTRY"
+ }
+}

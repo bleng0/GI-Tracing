@@ -10,9 +10,10 @@ running.
 
 ## Run it from a fresh clone (Windows PowerShell)
 
-You need **Git** and **Docker Desktop** with its Linux engine running. Install Docker Desktop if it is
-not already installed, open it once, and wait until it says *Docker Desktop is running*. No Python
-installation is needed. If your friend has already cloned the repository, start at step 2.
+You need **Git**, **Docker Desktop** with its Linux engine running, and the two MongoDB Atlas URIs from
+the project owner. `data/`, `out/` and the shared accounts database are already in the repository, so
+there is **no seeding and no account setup**. The dashboard reads its counts and documents live from the
+Atlas connection in `.env`; the committed files supply the PDFs, QR images and SQL workbench database.
 
 **1. Clone the repository and enter the folder.**
 
@@ -23,7 +24,18 @@ cd GI-Tracing
 
 Use the real GitHub URL in place of `<REPO_URL>`.
 
-**2. Confirm Docker is ready.**
+**2. Create `.env` with the Atlas URIs.** Put these two lines in the project folder, using the real URIs
+you were given:
+
+```text
+ATLAS_WRITE_URI=<pipeline user URI>
+ATLAS_READ_URI=<dashboard read-only user URI>
+```
+
+`.env` is ignored by Git and is never copied into the image. You and your friend each keep a copy; the
+URIs point at the same Atlas database. The read-only user must not be able to write.
+
+**3. Confirm Docker is ready.**
 
 ```powershell
 docker compose version
@@ -33,98 +45,62 @@ docker info
 `docker info` must print without an error. If it fails, start Docker Desktop, wait for it to finish, and
 make sure it is using Linux containers (Docker Desktop tray → *Switch to Linux containers*).
 
-**3. Create the folders the container writes to.** A GitHub clone does not contain `data/` or `out/`;
-they hold the database, keys, PDFs and accounts and must stay out of Git.
+**4. Build and start the dashboard.**
 
 ```powershell
-New-Item -ItemType Directory -Force data
-New-Item -ItemType Directory -Force out
-```
-
-**4. Set offline mode and build the image.**
-
-```powershell
-$env:GI_MODE = "offline"
-docker compose build
-```
-
-`GI_MODE` is passed into the container by `docker-compose.yml`. It stays set until this PowerShell window
-is closed. In Command Prompt use `set GI_MODE=offline`; on Linux/macOS use `export GI_MODE=offline` and
-`mkdir -p data out`.
-
-**5. Create the sample world.** This one-off container exits when the pipeline finishes. It writes into
-the `data/` and `out/` folders from step 3 and ends with a line like
-`21 passed, 9 failed, all as expected | 22 shipments, 80 PDFs | ... (all chains valid)`.
-
-```powershell
-docker compose run --rm web python -m gi_trace.run_all --yes
-```
-
-For a smaller world with 3 batches, add `--sample core`. Re-running replaces `data/` and `out/` but never
-`data/users.db`.
-
-**6. Create the three logins.** Run this command three times. Use role `admin`, then `employee`, then
-`delivery`, with a different password of at least 8 characters each time. The password is hidden while
-you type. Accounts live in `data/users.db`, which is why they are not in Git.
-
-```powershell
-docker compose run --rm web python -m gi_trace.web.create_user
-```
-
-If the dashboard is already running, an account can also be added later with:
-
-```powershell
-docker compose exec web python -m gi_trace.web.create_user
-```
-
-**7. Start the dashboard.**
-
-```powershell
-docker compose up -d
+docker compose up --build -d
 docker compose logs -f web
 ```
 
-Wait for `Running on http://127.0.0.1:5000`, then open **http://127.0.0.1:5000** and sign in. `Ctrl+C`
-closes the log view but leaves the container running. Only the `admin` account can open `/workbench`.
+Compose pins `GI_MODE=atlas`, so no shell variable is needed. Wait for
+`Running on http://127.0.0.1:5000`. `Ctrl+C` closes the log view but leaves the container running.
 
-The banner reads `OFFLINE MODE: local data from the last offline run`, and the Overview shows 30 batches,
-22 verified, 8 rejected, 22 shipments and 80 documents.
+**5. Sign in.** Open **http://127.0.0.1:5000** and use one of the shared demo accounts:
 
-**8. Stop and start again.**
+| Username | Password | Role |
+| --- | --- | --- |
+| `admin` | `demo-admin-2026` | admin |
+| `employee` | `demo-employee-2026` | employee |
+| `delivery` | `demo-delivery-2026` | delivery |
+
+Only `admin` can open `/workbench`. Five wrong passwords lock an account for five minutes.
+
+**6. Stop and start again.**
 
 ```powershell
 docker compose down
 docker compose up -d
 ```
 
-Your data and accounts survive because `data/` and `out/` are mounted from the project folder. After a
-code change, rebuild with `docker compose up --build -d`.
-
 The container listens on `0.0.0.0:5000` internally; Compose publishes it as `127.0.0.1:5000:5000`, so it
 is reachable only from this PC. If port 5000 is busy, change the left-hand side of that mapping in
 `docker-compose.yml`.
 
-## Use Atlas instead (optional)
+## Shared accounts and data
 
-The steps above work with no Atlas account and no `.env`. To use MongoDB Atlas instead, create `.env`
-in the project folder with two lines:
+Accounts live in `accounts/users.db`, which **is tracked in Git**. When either of you adds an account:
 
-```text
-ATLAS_WRITE_URI=<pipeline user URI>
-ATLAS_READ_URI=<dashboard read-only user URI>
+```powershell
+docker compose exec web python -m gi_trace.web.create_user
 ```
 
-Create those users in Atlas; the read-only user must not be able to write. `.env` is ignored by Git and is
-never copied into the image. From a fresh PowerShell window (so `GI_MODE` is unset), run step 5 again,
-then `docker compose down` and `docker compose up -d`. Check the connection with:
+then commit `accounts/users.db` and push. The other clone gets the account on its next pull. Passwords
+are stored only as scrypt hashes, so sharing the file does not share the typed passwords; tell the other
+person the password separately.
+
+`data/` and `out/` are also tracked, so a fresh clone already has the SQLite database, demo keys,
+ledger copies, PDFs, QR codes and reports. The dashboard does not fall back to these files if Atlas is
+unreachable: it shows a clear error instead. A wrong password or malformed URI in `.env` is also an
+error, never offline mode.
+
+To check the connection:
 
 ```powershell
 docker compose run --rm web python -m gi_trace.check_atlas
 ```
 
 It ends with `OK: Atlas reachable, write and read work`. On a different network, add that network's IP
-under Network Access in Atlas before running the check. A wrong password or malformed URI in `.env` is an
-error, not offline mode.
+under Network Access in Atlas before running the check.
 
 ## Commands
 
@@ -136,21 +112,21 @@ Every command runs inside the `web` container. `run` starts a one-off container 
 | `docker compose build` | build the image with all runtime dependencies preinstalled |
 | `docker compose up -d` / `docker compose down` | start / stop the dashboard on http://127.0.0.1:5000 (this PC only) |
 | `docker compose logs -f web` | follow dashboard logs; Ctrl+C leaves the container running |
-| `docker compose run --rm web python -m gi_trace.run_all --yes` | create the sample world in `data/` and `out/` |
-| `docker compose run --rm web python -m gi_trace.run_all --yes --sample core` | smaller 3-batch sample |
-| `docker compose run --rm web python -m gi_trace.web.create_user` | add a dashboard account (hidden password) |
-| `docker compose exec web python -m gi_trace.web.create_user` | add an account while the dashboard is running |
+| `docker compose run --rm web python -m gi_trace.run_all --yes` | optional: reseed Atlas and regenerate the tracked `data/` and `out/` files |
+| `docker compose run --rm web python -m gi_trace.run_all --yes --sample core` | optional: smaller 3-batch sample |
+| `docker compose run --rm web python -m gi_trace.web.create_user` | add a dashboard account (hidden password); commit the database afterwards |
+| `docker compose exec web python -m gi_trace.web.create_user` | add an account while the dashboard is running; commit afterwards |
 | `docker compose run --rm web python -m gi_trace.check_atlas` | check Atlas connectivity and permissions |
 | `docker compose run --rm web python -m gi_trace.atlas_setup` | one-time Atlas users, collections and indexes (writes the URIs to `.env`) |
-| `docker compose run --rm web python -m gi_trace.snapshot` | copy Atlas data into `data/` for offline use |
+| `docker compose run --rm web python -m gi_trace.snapshot` | refresh the committed `data/` copy from Atlas |
 | `docker compose run --rm web python -m gi_trace.docgen.verify out/certificates` | VALID / TAMPERED / UNKNOWN per PDF |
 | `docker compose run --rm web python -m gi_trace.demo` | short in-memory walkthrough of the four mechanisms |
 
 The source tree contains 610 tests used by CI; the runtime image deliberately excludes `tests/`.
 
-`GI_MODE` is set for the container by Compose from your shell: `offline` never tries Atlas, `atlas` never
-falls back, and `auto` (the default) uses Atlas if it answers within 30 seconds. A wrong password or
-malformed URI in `.env` is an error, not offline mode.
+`GI_MODE` is fixed to `atlas` in `docker-compose.yml`. The library still supports `auto` and `offline`
+for tests and one-off tools, but the dashboard always uses the Atlas URIs from `.env` and never switches
+to the committed local copy.
 
 ## Dashboard
 
@@ -173,8 +149,8 @@ Restarting the dashboard signs everyone out.
 **Query console.** Pick `certificates` or `documents`, type a JSON filter, optional projection and sort
 (`{"field": 1}` or `-1`) and a limit of 1 to 200, then Run (table) or Download CSV. Four examples fill
 the form. Read only. Refused: `$where`, `$function`, `$accumulator`, `$out`, `$merge` (anywhere, any
-letter case, also as text values such as `"$out"`). Atlas stops a query after 10 s; offline each query
-runs in its own process inside the container, also stopped after 10 s. CSV cells that a spreadsheet would
+letter case, also as text values such as `"$out"`). Atlas stops a query after 10 s. The library's offline
+path also runs each query in its own process, stopped after 10 s. CSV cells that a spreadsheet would
 treat as a formula start with an apostrophe.
 
 **Query Workbench.** Admin only. The split editor has line numbers, Tab indentation, Ctrl/⌘+Enter to run,
@@ -191,9 +167,10 @@ blocks) and shows "Chain valid" or each problem, with the affected blocks marked
 
 ## What is in data/ and out/
 
-- `data/` is the latest world: `gi_trace.db` (SQLite), `keys/`, `labfiles/`, `documents.json` and
-  `ledgers/` (the offline data, or after an online run the offline copy of Atlas), `world.json` (what it is and, after an online run, `snapshot_at`),
-  and `users.db` (accounts and audit log). Keys on disk are a demo convenience, see below.
+- `data/` is a committed snapshot of the latest world: `gi_trace.db` (SQLite), `keys/`, `labfiles/`,
+  `documents.json`, `ledgers/` and `world.json` (including `snapshot_at`). The dashboard reads live data
+  from Atlas; these files supply the SQL workbench, PDF downloads, QR images and ledger verification.
+  Accounts are in the tracked `accounts/users.db`, not here.
 - `data.new/` is where `run_all` builds the next world. It replaces `data/` only when the whole run has
   succeeded, so a failed run leaves the previous world, and the dashboard showing it, unchanged; the
   dashboard then says a run "is in progress or was interrupted". The next `run_all` removes a leftover
@@ -212,10 +189,12 @@ pipeline's user cannot recreate.
 
 ## Keys and generated files
 
-**Keys on disk are a demo convenience, not key custody.** `data/keys/` holds every node's
+**Keys on disk are committed demo keys, not key custody.** `data/keys/` holds every node's
 private signing key, the key that signs each ledger's checkpoint (never sent to Atlas), and all
-six regulators' Shamir shares of each ledger's redaction trapdoor (the trapdoor itself is never written). In real use each share would be held by a different
-regulator; here any three files in `data/keys/shares/` are enough to redact a ledger.
+six regulators' Shamir shares of each ledger's redaction trapdoor (the trapdoor itself is never written).
+They are in Git so a fresh clone can verify the Atlas ledgers without setup. In real use each share would
+be held by a different regulator; here any three files in `data/keys/shares/` are enough to redact a
+ledger. Do not reuse these keys for anything real.
 
 `run_all` fills `out/`: `labfiles/` (raw lab CSVs), `certificates/` (PDFs: hemp lab assays,
 tanning attestations, cooperative membership letters, export clearances, customs waybills and one
@@ -245,7 +224,7 @@ signed by this system's own keys, not by a recognised certificate authority.
 | Ledger store (files or Atlas), signed checkpoints, pending handshake signatures | `gi_trace/ledger_store.py` | — |
 | Dashboard: pages, roles, CSRF, offline switch | `gi_trace/web/app.py`, `gi_trace/web/data.py` | — |
 | Dashboard container (the only run path) | `Dockerfile`, `.dockerignore`, `docker-compose.yml` | — |
-| Accounts, lockout, audit log | `gi_trace/web/users.py`, `gi_trace/web/create_user.py` | — |
+| Shared accounts, lockout, audit log | `accounts/users.db`, `gi_trace/web/users.py`, `gi_trace/web/create_user.py` | — |
 | Query console, Query Workbench (offline worker) and ledger viewer | `gi_trace/web/query.py`, `gi_trace/web/query_worker.py`, `gi_trace/web/sql_workbench.py`, `gi_trace/web/workbench.py`, `gi_trace/web/ledger_view.py` | — |
 | Offline snapshot of the Atlas data | `gi_trace/snapshot.py` | — |
 | Access-control matrix and break-it check | `tests/test_roles.py`, `tests/test_break_it.py` | — |

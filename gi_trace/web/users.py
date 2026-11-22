@@ -1,6 +1,6 @@
 """Dashboard accounts: roles, scrypt password hashes, lockout and an audit log.
 
-    data/users.db   kept apart from gi_trace.db, which every run_all re-seeds
+    accounts/users.db   tracked in Git so demo logins are shared by every clone
 
 Roles are admin, employee and delivery (PLAN.md section 4). Passwords are stored only
 as scrypt hashes with a random salt. Five failed logins in a row lock the account for
@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROLES = ("admin", "employee", "delivery")
-DEFAULT_DB = Path(__file__).resolve().parents[2] / "data" / "users.db"  # the project's data/, from any folder
+DEFAULT_DB = Path(__file__).resolve().parents[2] / "accounts" / "users.db"  # tracked, so logins are shared
 MAX_FAILURES = 5
 LOCK_SECONDS = 300
 MIN_PASSWORD, MAX_PASSWORD = 8, 1024

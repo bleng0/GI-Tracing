@@ -158,15 +158,15 @@ folders, never in `data/` or `out/`.
 Check: the timing test passes 20 runs in a row under `-n 2`; full suite passes.
 
 ### Step 11. Sessions that survive a restart, role checked on the server (open items 3 and 6, 2.5 h)
-1. A `sessions` table in `data/users.db`: SHA-256 of the session id (never the id itself), username,
+1. A `sessions` table in `accounts/users.db`: SHA-256 of the session id (never the id itself), username,
    created, last seen. Idle expiry 8 h, absolute 24 h. Signing out deletes the row.
-2. The cookie-signing key is created once and kept in `users.db` (which runs never replace), so a
+2. The cookie-signing key is created once and kept in `accounts/users.db` (which runs never replace), so a
    restart keeps everyone signed in.
 3. Every request reads the role (and the lock state) from the `users` table, not from the cookie, so a
    changed role or a locked account takes effect on the next request.
-Check (tests): restart the app (new `create_app`, same `users.db`): still signed in; sign out, then a
+Check (tests): restart the app (new `create_app`, same `accounts/users.db`): still signed in; sign out, then a
 copied cookie is refused on GET and POST; change a user's role in the table: next request uses it;
-an expired session goes to sign-in; no session id appears in `users.db`. Break-it gains two
+an expired session goes to sign-in; no session id appears in `accounts/users.db`. Break-it gains two
 mutations (role from cookie again; sign-out not deleting the row). Stress: 16 threads signing in, out
 and browsing at once, no wrong status. **You:** restart the dashboard and reload: still signed in (2 min).
 

@@ -6,11 +6,12 @@ services:
       - "127.0.0.1:5000:5000"
     env_file:
       - path: .env
-        required: false
+        required: true
     environment:
       GI_DOCKER: 1
-      GI_MODE: ${GI_MODE:-auto}
+      GI_MODE: atlas
     volumes:
+      - ./accounts:/app/accounts
       - ./data:/app/data
       - ./out:/app/out
     restart: unless-stopped

@@ -16,15 +16,16 @@ nodes, no consensus algorithm, no mining or tokens; one program plays every part
 
 Run every command from the project folder. Nothing runs from a local Python install.
 
-1. Online: `docker compose run --rm web python -m gi_trace.check_atlas` ends with `OK`. Empty the three
-   Atlas ledger collections if an earlier run filled them (README, "Starting Atlas over").
-2. `docker compose run --rm web python -m gi_trace.run_all --yes`: `21 passed, 9 failed, all as expected`.
-3. Three logins exist (`docker compose run --rm web python -m gi_trace.web.create_user`): admin,
-   employee, delivery.
+1. Put the two Atlas URIs in `.env` (see the README). It stays untracked and points both clones at the
+   same database. `docker compose run --rm web python -m gi_trace.check_atlas` must end with `OK`.
+2. Start with `docker compose up --build` and sign in as `admin` / `demo-admin-2026`. The accounts,
+   `data/` and `out/` are already in Git: there is no seeding and no account setup.
+3. Check that `/workbench` opens for admin and returns "Not allowed" for `delivery` /
+   `demo-delivery-2026`.
 4. Copy one PDF to the desktop and make a tampered twin: open a copy of
    `out\certificates\hemp_lab_assay__HEMP-NP-0001.pdf` in Notepad, change one digit, save.
-5. Offline rehearsal: Wi-Fi off, `docker compose down` then `docker compose up --build`, check the
-   banner reads `OFFLINE MODE: data as of ...`. Wi-Fi back on.
+5. If an earlier run filled the Atlas ledger collections, follow README, "Starting Atlas over", before
+   demonstrating a fresh `docker compose run --rm web python -m gi_trace.run_all --yes`.
 
 ## The 10-minute script
 
@@ -38,16 +39,17 @@ Run every command from the project folder. Nothing runs from a local Python inst
 | 5-6 | Verify: upload the original PDF, then the tampered one | VALID, then TAMPERED: the PDF's hash, the issuer's signature and the ledger block must all agree. **[BLOCKCHAIN]** for the ledger check; the PDF itself is **[NOT BLOCKCHAIN]**. |
 | 6-7 | Query console: example "Hemp assays over the 0.3 % THC limit", Run (4 rows), then Download CSV | A read-only window into MongoDB for the admin, with a 10-second limit, at most 200 rows and dangerous operators refused. **[NOT BLOCKCHAIN]** |
 | 7-8 | Sign out; sign in as **delivery** | Delivery staff see only Shipments and Verify; typing `/query` gives "Not allowed". Same for employee with admin pages. **[NOT BLOCKCHAIN]** (role-based access). |
-| 8-9 | Turn Wi-Fi off, `docker compose down` then `docker compose up --build` (up to 30 s), sign in as **admin** (a restart signs everyone out), Overview | Same counts from the offline copy, with the banner "OFFLINE MODE: data as of ...". **[NOT BLOCKCHAIN]** |
+| 8-9 | Sign out, sign in as **employee**, try `/workbench`, then sign in as **admin** and open Query Workbench | Employee gets "Not allowed"; admin gets the read-only SQL/NoSQL editor over the committed snapshot and the same live Atlas collections as the other clone. **[NOT BLOCKCHAIN]** |
 | 9-10 | Wrap up | Section 7 of PLAN.md: one program holds every key, PDFs are signed by this system's own keys, offline data is not merged back into Atlas. |
 
 ## Feature by feature
 
 ### Data tiers [NOT BLOCKCHAIN]
 SQLite holds artisans, cooperatives, batches, orders, tariffs and THC rules (`sql_store.py`). MongoDB
-(Atlas online, a local file offline) holds the signed certificates and the documents (`doc_store.py`).
-The two are joined on the indexed `batch_id` (`federated.py`). Mechanism 1, the JSON-Tiles view
-(`tiles.py`), copies the certificate fields that appear in most documents into an indexed SQL table.
+Atlas holds the signed certificates and documents (`doc_store.py`); the committed `data/` files are a
+snapshot for the SQL workbench and verification. The two are joined on the indexed `batch_id`
+(`federated.py`). Mechanism 1, the JSON-Tiles view (`tiles.py`), copies the certificate fields that
+appear in most documents into an indexed SQL table.
 
 ### Dual-compliance oracle [NOT BLOCKCHAIN] and tamper-evident anchoring [BLOCKCHAIN]
 `oracle.py` checks each batch against the rules of its origin and destination (THC limit, tanning,
@@ -78,8 +80,8 @@ In PowerShell, from the project folder, after any run:
    `docker stop <name>`.
 
 ### Append-only storage [BLOCKCHAIN]
-Online the blocks are in Atlas under a user that cannot delete, with unique block positions; offline in
-`data/ledgers/`. Either way the signed checkpoint catches removed blocks.
+The blocks are in Atlas under a user that cannot delete, with unique block positions. The committed
+`data/ledgers/` copy lets a fresh clone verify the chain and the signed checkpoint catches removed blocks.
 
 ### Multi-party border commit [BLOCKCHAIN]
 `handshake.py`: an export locks the batch, collects 4 or 5 signatures (5 when a batch has both hemp and
@@ -114,18 +116,18 @@ formulas. Four saved examples: rejected certificates; hemp assays over 0.3 % THC
 HEMP-NP-0001; export clearances on the Nepal ledger. The admin-only Query Workbench beside it adds a
 read-only SQL/NoSQL editor over `gi_trace.db` and the four document collections.
 
-### Online and offline [NOT BLOCKCHAIN]
-With Atlas unreachable for 30 seconds the app uses local files and shows OFFLINE MODE. After every online
-run the Atlas data is copied into `data/`, so the dashboard can show the same data with Wi-Fi off.
-Data written offline stays local.
+### Live Atlas with committed files [NOT BLOCKCHAIN]
+Compose pins `GI_MODE=atlas`, so both clones read the same Atlas database through the URIs in `.env`.
+The tracked `data/` and `out/` files supply the PDFs, QR images and SQL workbench. If Atlas is
+unreachable the dashboard shows an error; it does not silently switch to the local copy.
 
 ## If something goes wrong during the demo
 
 | You see | Do |
 | --- | --- |
-| "Atlas already holds ledgers" | README, "Starting Atlas over" (2 minutes), or demo offline. |
-| NO DATA banner | Run `docker compose run --rm web python -m gi_trace.run_all --yes`, reload. |
+| "Atlas already holds ledgers" | README, "Starting Atlas over" (2 minutes). |
+| NO DATA banner | Check the URIs in `.env`, Network Access in Atlas, and `docker compose run --rm web python -m gi_trace.check_atlas`, then reload. |
 | "A run is in progress or was interrupted" | A `data.new` folder was left; the next `run_all` removes it. The dashboard keeps showing the previous data. |
 | Signed out after restarting the dashboard | Expected: sign in again. |
-| Download says "Not found" | The last run failed after emptying `out/`; run `run_all` again. |
-| Dashboard start waits 30 s | It is trying Atlas; with Wi-Fi off it then opens the offline copy. |
+| Download says "Not found" | Pull the latest committed `out/` files, or run `run_all` again. |
+| Dashboard start waits 30 s | It is trying Atlas. It will not switch to the local copy; check `.env` and the network. |

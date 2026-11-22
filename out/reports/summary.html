@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>GI-Craft-Tracing pipeline summary (SAMPLE)</title>
+<style>
+body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
+.banner { color: #b00020; font-weight: bold; }
+table { border-collapse: collapse; font-size: 0.9rem; }
+th, td { border: 1px solid #ccc; padding: 0.3rem 0.5rem; text-align: left; }
+tr.fail td { background: #fdecea; }
+</style></head><body>
+<p class="banner">SAMPLE / DEMONSTRATION. NOT AN OFFICIAL DOCUMENT. All names, codes and figures are fictional.</p>
+<h1>Pipeline summary</h1>
+<p>21 batches passed, 9 failed
+(all as the sample expects).
+22 shipments committed, 80 PDFs issued,
+redaction: NP block 32. Run took 53.3 s.</p>
+<h2>Batches</h2>
+<table><tr><th>Batch</th><th>Origin</th><th>Product</th><th>Date</th><th>Result</th><th>As expected</th>
+<th>Shipments</th><th>PDFs</th><th>Reason</th></tr>
+<tr class='pass'><td>CHAP-PK-0001</td><td>PK</td><td>Peshawari chappal</td><td>2026-10-08</td><td>PASS</td><td>yes</td><td>ORD-0002</td><td>4</td><td></td></tr>
+<tr class='pass'><td>CHAP-PK-0002</td><td>PK</td><td>Peshawari chappal</td><td>2026-07-28</td><td>PASS</td><td>yes</td><td>ORD-0020</td><td>4</td><td></td></tr>
+<tr class='pass'><td>CHAP-PK-0003</td><td>PK</td><td>Peshawari chappal</td><td>2026-05-31</td><td>PASS</td><td>yes</td><td>ORD-0021</td><td>4</td><td></td></tr>
+<tr class='fail'><td>CHAP-PK-0004</td><td>PK</td><td>Peshawari chappal</td><td>2026-08-13</td><td>FAIL</td><td>yes</td><td></td><td>2</td><td>leather is not vegetable-tanned</td></tr>
+<tr class='pass'><td>CHAP-PK-0005</td><td>PK</td><td>Peshawari chappal</td><td>2026-05-29</td><td>PASS</td><td>yes</td><td>ORD-0023</td><td>4</td><td></td></tr>
+<tr class='fail'><td>CHAP-PK-0006</td><td>PK</td><td>Peshawari chappal</td><td>2026-07-07</td><td>FAIL</td><td>yes</td><td></td><td>2</td><td>tanning_attestation signer is not a registered TANNING_REGISTRY</td></tr>
+<tr class='pass'><td>CHAP-PK-0007</td><td>PK</td><td>Peshawari chappal</td><td>2026-07-10</td><td>PASS</td><td>yes</td><td>ORD-0025</td><td>4</td><td></td></tr>
+<tr class='fail'><td>CHAP-PK-0008</td><td>PK</td><td>Peshawari chappal</td><td>2026-08-15</td><td>FAIL</td><td>yes</td><td></td><td>2</td><td>leather is not vegetable-tanned</td></tr>
+<tr class='pass'><td>CHAP-PK-0009</td><td>PK</td><td>Peshawari chappal</td><td>2026-07-20</td><td>PASS</td><td>yes</td><td>ORD-0027</td><td>4</td><td></td></tr>
+<tr class='pass'><td>CHAP-PK-0010</td><td>PK</td><td>Peshawari chappal</td><td>2026-10-23</td><td>PASS</td><td>yes</td><td>ORD-0028</td><td>4</td><td></td></tr>
+<tr class='pass'><td>HEMP-IN-0001</td><td>IN</td><td>Hemp yarn</td><td>2026-07-06</td><td>PASS</td><td>yes</td><td>ORD-0012</td><td>4</td><td></td></tr>
+<tr class='pass'><td>HEMP-IN-0002</td><td>IN</td><td>Hemp yarn</td><td>2026-06-07</td><td>PASS</td><td>yes</td><td>ORD-0013</td><td>4</td><td></td></tr>
+<tr class='fail'><td>HEMP-IN-0003</td><td>IN</td><td>Hemp yarn</td><td>2026-10-10</td><td>FAIL</td><td>yes</td><td></td><td>2</td><td>THC 0.84% exceeds the IN limit of 0.3%</td></tr>
+<tr class='pass'><td>HEMP-IN-0004</td><td>IN</td><td>Hemp yarn</td><td>2026-10-25</td><td>PASS</td><td>yes</td><td>ORD-0015</td><td>4</td><td></td></tr>
+<tr class='fail'><td>HEMP-IN-0005</td><td>IN</td><td>Hemp yarn</td><td>2026-05-04</td><td>FAIL</td><td>yes</td><td></td><td>2</td><td>raw lab file does not match the assay certificate</td></tr>
+<tr class='pass'><td>HEMP-IN-0006</td><td>IN</td><td>Hemp yarn</td><td>2026-07-23</td><td>PASS</td><td>yes</td><td>ORD-0017</td><td>4</td><td></td></tr>
+<tr class='fail'><td>HEMP-IN-0007</td><td>IN</td><td>Hemp yarn</td><td>2026-05-18</td><td>FAIL</td><td>yes</td><td></td><td>2</td><td>THC 0.5% exceeds the IN limit of 0.3%</td></tr>
+<tr class='pass'><td>HEMP-IN-0008</td><td>IN</td><td>Hemp yarn</td><td>2026-06-03</td><td>PASS</td><td>yes</td><td>ORD-0019</td><td>4</td><td></td></tr>
+<tr class='pass'><td>HEMP-NP-0001</td><td>NP</td><td>Hemp yarn</td><td>2026-10-02</td><td>PASS</td><td>yes</td><td>ORD-0001</td><td>5</td><td></td></tr>
+<tr class='fail'><td>HEMP-NP-0002</td><td>NP</td><td>Hemp yarn</td><td>2026-10-05</td><td>FAIL</td><td>yes</td><td></td><td>2</td><td>THC 0.9% exceeds the NP limit of 0.3%</td></tr>
+<tr class='pass'><td>HEMP-NP-0003</td><td>NP</td><td>Hemp yarn</td><td>2026-07-21</td><td>PASS</td><td>yes</td><td>ORD-0003</td><td>4</td><td></td></tr>
+<tr class='fail'><td>HEMP-NP-0004</td><td>NP</td><td>Hemp yarn</td><td>2026-10-05</td><td>FAIL</td><td>yes</td><td>ORD-0004</td><td>4</td><td>exported once (ORD-0004); second export refused: HEMP-NP-0004 is already locked or exported</td></tr>
+<tr class='pass'><td>HEMP-NP-0005</td><td>NP</td><td>Hemp yarn</td><td>2026-07-27</td><td>PASS</td><td>yes</td><td>ORD-0006</td><td>4</td><td></td></tr>
+<tr class='fail'><td>HEMP-NP-0006</td><td>NP</td><td>Hemp yarn</td><td>2026-08-11</td><td>FAIL</td><td>yes</td><td></td><td>2</td><td>THC 0.71% exceeds the NP limit of 0.3%</td></tr>
+<tr class='pass'><td>HEMP-NP-0007</td><td>NP</td><td>Hemp yarn</td><td>2026-09-09</td><td>PASS</td><td>yes</td><td>ORD-0008</td><td>4</td><td></td></tr>
+<tr class='pass'><td>HEMP-NP-0008</td><td>NP</td><td>Hemp yarn</td><td>2026-06-01</td><td>PASS</td><td>yes</td><td>ORD-0009</td><td>4</td><td></td></tr>
+<tr class='pass'><td>HEMP-NP-0009</td><td>NP</td><td>Hemp yarn</td><td>2026-08-11</td><td>PASS</td><td>yes</td><td>ORD-0010</td><td>4</td><td></td></tr>
+<tr class='pass'><td>HEMP-NP-0010</td><td>NP</td><td>Hemp yarn</td><td>2026-10-25</td><td>PASS</td><td>yes</td><td>ORD-0011</td><td>4</td><td></td></tr>
+<tr class='pass'><td>MIX-NP-0001</td><td>NP</td><td>Hemp-stitched chappal</td><td>2026-05-07</td><td>PASS</td><td>yes</td><td>ORD-0029</td><td>5</td><td></td></tr>
+<tr class='pass'><td>MIX-PK-0001</td><td>PK</td><td>Hemp-stitched chappal</td><td>2026-10-06</td><td>PASS</td><td>yes</td><td>ORD-0030</td><td>5</td><td></td></tr>
+</table>
+<h2>Ledgers</h2><ul><li>NP: 79 blocks, chain valid</li><li>IN: 45 blocks, chain valid</li><li>PK: 69 blocks, chain valid</li></ul>
+<h2>JSON-Tiles columns extracted to SQL</h2><ul><li><code>artisan_coop_id</code> 100%</li><li><code>batch_id</code> 100%</li><li><code>cert_type</code> 100%</li><li><code>compliance_status</code> 100%</li><li><code>operator_code</code> 100%</li><li><code>origin_gps.lat</code> 100%</li><li><code>origin_gps.lon</code> 100%</li><li><code>signature</code> 100%</li><li><code>signer</code> 100%</li></ul>
+</body></html>

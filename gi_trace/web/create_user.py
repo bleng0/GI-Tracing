@@ -39,6 +39,8 @@ def run(db, ask=input, ask_hidden=getpass.getpass, log=print) -> int:
         log("\nCancelled. Nothing was created.")
         return 1
     log(f"Created {role} account {name}.")
+    if str(db) == str(DEFAULT_DB):
+        log("Commit accounts/users.db and push so other clones get this account.")
     return 0
 
 

@@ -3,10 +3,10 @@
 Pages and who sees them follow PLAN.md section 4. Every route checks the role:
 logged-out visitors go to the login page, a wrong role gets 403. Forms carry a
 CSRF token; the session cookie is HttpOnly and SameSite=Strict; responses forbid
-framing, scripts from elsewhere and caching. The world is opened with the read-only
-Atlas user (or the offline copy) and reopened when a run is published. If Atlas
-stops answering, the dashboard switches to the offline copy and tries Atlas again
-every five minutes. Sessions live in this process: signing out ends them for good.
+framing, scripts from elsewhere and caching. Compose pins GI_MODE=atlas, so the
+world is opened with the read-only Atlas user from .env and the dashboard never
+silently switches to the committed local copy. Sessions live in this process:
+signing out ends them for good.
 """
 from __future__ import annotations
 
@@ -115,7 +115,7 @@ def _banners(world, error, loading: bool, run_pending: bool, is_admin: bool) -> 
         out.append({"kind": "offline", "text": "Opening the data (up to 30 s if Atlas is slow). Reload in a moment."})
     elif world is None:
         detail = f": {error}" if is_admin else ". Sign in as an admin to see why"
-        out.append({"kind": "error", "text": f"NO DATA{detail}. Run docker compose run --rm web python -m gi_trace.run_all --yes, then reload."})
+        out.append({"kind": "error", "text": f"NO DATA{detail}. Check the Atlas URIs in .env and the connection, then reload."})
     elif world.offline and world.snapshot_at:
         out.append({"kind": "offline", "text": f"OFFLINE MODE: data as of {world.snapshot_at} (copy taken after the "
                                                "last online run). Atlas could not be reached."})
@@ -409,6 +409,10 @@ def create_app(data_dir=ROOT / "data", out_dir=ROOT / "out", users_db=DEFAULT_DB
 
     @app.errorhandler(ConnectionFailure)
     def atlas_dropped(e):
+        if os.environ.get("GI_MODE", "auto").strip().lower() == "atlas":
+            return render_template("error.html", title="Atlas stopped answering",
+                                   message="The dashboard reads live Atlas data and does not use the local copy. "
+                                           "Check the URIs in .env and the connection, then reload."), 503
         holder.fall_back()
         if request.method == "GET":
             return redirect(request.full_path)
