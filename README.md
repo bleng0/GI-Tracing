@@ -3,92 +3,44 @@
 Working prototype of *Multi-Jurisdictional Traceability for South Asian GI Crafts*:
 Himalayan hemp and Peshawari chappal batches moving between Nepal, India and Pakistan.
 
-Have Docker Desktop but not Python? Skip the setup below and go straight to
-[Dashboard in Docker](#dashboard-in-docker-fresh-clone-windows-powershell).
+This repository runs **only through Docker Compose**. The runtime and every dependency live inside the
+image; you do not need Python, pip, or a virtual environment on your machine.
 
-## Set up (once, about 3 minutes, plus 12 for the optional tests)
+## Requirements
 
-Windows 10/11, Python 3.10 or newer (tested with 3.14). In **Command Prompt**, in the project folder:
+- Windows 10/11 with Docker Desktop installed and running (or Docker Engine with Compose on Linux/macOS).
+- Git, to clone or update the repository.
 
-```bat
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+That is all. The commands below are PowerShell; on Linux/macOS use the same `docker compose` lines and
+set the environment variable with `export GI_MODE=offline`.
+
+## Atlas credentials (online mode only)
+
+A fresh clone works offline and needs no Atlas account. To use MongoDB Atlas instead, create `.env` in
+the project folder with two lines:
+
+```text
+ATLAS_WRITE_URI=<pipeline user URI>
+ATLAS_READ_URI=<dashboard read-only user URI>
 ```
 
-In PowerShell, `activate` is blocked by the default execution policy; run
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use Command Prompt.
+Create those users in Atlas; the read-only user must not be able to write. `.env` is ignored by Git and is
+never copied into the image. Compose reads it when the container is created, so after changing it run
+`docker compose down` and then `docker compose up -d`. Check the connection with:
 
-Optional: `python -m pytest` runs 607 tests in about 12 minutes on Windows. They always run offline and never touch
-Atlas, `.env`, `data/` or `out/` (they work in temporary folders).
-
-**Atlas (online use only).** `.env` must hold `ATLAS_WRITE_URI` (the pipeline's user) and
-`ATLAS_READ_URI` (the dashboard's read-only user). Without them everything runs offline. To create them
-once (about 10 minutes):
-
-1. In the Atlas website, create a free M0 cluster, then under the project's Access Manager create an API
-   key with the Project Owner role.
-2. Put three lines in `.env` (a text file in the project folder): `ATLAS_PROJECT_ID=...` (Project
-   Settings), `ATLAS_PUBLIC_KEY=...` and `ATLAS_PRIVATE_KEY=...`.
-3. `python -m gi_trace.atlas_setup`. It adds this PC's public IP to the network access list, creates the
-   writer and read-only users, the collections and indexes, checks the permissions and ends with `DONE`.
-   It appends the two URIs to `.env` and never prints them.
-4. Delete the API key in Atlas and remove the three lines from `.env`.
-
-`python -m gi_trace.check_atlas` checks the connection: it connects, lists the collections, writes and
-reads one test document, and ends with `OK: Atlas reachable, write and read work`. **On a different
-network** (school, venue) Atlas refuses connections until you add that network's IP under Network Access
-in the Atlas website; run `check_atlas` there before the demo.
-
-**Dashboard accounts.** Create the three logins once; each command asks for the username, the role
-and a hidden password (8 or more characters). They are kept in `data/users.db`, which runs never replace.
-
-```bat
-python -m gi_trace.web.create_user
+```powershell
+docker compose run --rm web python -m gi_trace.check_atlas
 ```
 
-Answer `admin`, `employee` and `delivery` as the role in three runs.
+It ends with `OK: Atlas reachable, write and read work`. On a different network, add that network's IP
+under Network Access in Atlas before running the check.
 
-## Demo, online (MongoDB Atlas)
+Without those two URIs the dashboard uses the local snapshot, and a fresh offline run works normally.
 
-1. `python -m gi_trace.check_atlas` must end with `OK: Atlas reachable ...`.
-2. Atlas must hold no ledgers from an earlier run (see "Starting Atlas over" below), otherwise step 3
-   stops with "Atlas already holds ledgers".
-3. `python -m gi_trace.run_all --yes` (about 15 s offline, longer online). It prints
-   `document store: MongoDB Atlas`, a table of 30 batches and
-   `21 passed, 9 failed, all as expected | 22 shipments, 80 PDFs | ledgers NP: 79 blocks, IN: 45 blocks, PK: 69 blocks (all chains valid)`.
-   At the end it copies the Atlas data into `data/` (the offline snapshot, below).
-4. `python -m gi_trace.web`, then open http://127.0.0.1:5000 and sign in. No yellow
-   OFFLINE banner means the pages read Atlas through the read-only user. The Overview shows
-   30 batches, 22 verified, 8 rejected, 22 shipments, 80 documents (HEMP-NP-0004 is counted as
-   verified: its certificates passed; only its second export was refused, which makes it one of the
-   9 failures in the `run_all` table).
+## Run the project with Docker (fresh clone)
 
-## Demo, offline (no Wi-Fi)
-
-Two ways, both with the same dashboard:
-
-- **Snapshot of the last online run** (best for showing "the same data, offline"): after an online
-  `run_all`, turn Wi-Fi off and run only `python -m gi_trace.web`. It waits up to 30 s for Atlas, prints
-  `Data: OFFLINE (local copy)`, and every page shows
-  `OFFLINE MODE: data as of <time of the last online run> (copy taken after the last online run)`.
-  The counts are the same as online. `python -m gi_trace.snapshot` refreshes this copy by hand while online.
-- **A fresh offline run:** `set GI_MODE=offline` (PowerShell: `$env:GI_MODE="offline"`), then
-  `python -m gi_trace.run_all --yes` and `python -m gi_trace.web`. The run prints
-  `document store: OFFLINE MODE (local file store)` and the same 21 / 9 table; the banner reads
-  `OFFLINE MODE: local data from the last offline run.` This replaces the snapshot in `data/`.
-  `GI_MODE` stays set in that window: undo it with `set GI_MODE=` (PowerShell: `Remove-Item Env:GI_MODE`)
-  or open a new window before running online again.
-  With `GI_MODE=auto` (the default) and Wi-Fi off, `run_all` waits 30 s, prints
-  `OFFLINE MODE: Atlas not reachable within 30 s`, and does the same.
-
-If Atlas stops answering while the dashboard runs, it switches to the snapshot by itself and tries
-Atlas again every five minutes.
-
-## Dashboard in Docker (fresh clone, Windows PowerShell)
-
-Use this path if you have Docker Desktop and do **not** want to install Python locally. All commands below
-run from the project folder. They use the offline sample world, so no Atlas account or `.env` is needed.
+All commands run from the project folder. The first pass uses the offline sample world, so no Atlas
+account or `.env` is needed.
 
 **1. Install and check Docker.** Install Docker Desktop, start it, then:
 
@@ -115,11 +67,15 @@ docker compose build
 PowerShell window. In Command Prompt use `set GI_MODE=offline` instead.
 
 **4. Create the sample world.** This is a one-off container that exits when the pipeline finishes. It
-writes into the `data/` and `out/` folders you made in step 2.
+writes into the `data/` and `out/` folders you made in step 2. It ends with a line like
+`21 passed, 9 failed, all as expected | 22 shipments, 80 PDFs | ... (all chains valid)`.
 
 ```powershell
 docker compose run --rm web python -m gi_trace.run_all --yes
 ```
+
+For a smaller world with 3 batches instead of 30, add `--sample core`. Re-running this command replaces
+`data/` and `out/` but never `data/users.db`.
 
 **5. Create the three logins.** Run this next command three times. Answer `admin`, `employee` and
 `delivery` as the role, with a different password of at least 8 characters each time. The password is
@@ -145,6 +101,10 @@ docker compose logs -f web
 Wait for `Running on http://127.0.0.1:5000`, then open **http://127.0.0.1:5000** and sign in. Ctrl+C
 closes the log view but leaves the container running. Only the `admin` account can open `/workbench`.
 
+With the offline sample the banner reads `OFFLINE MODE: local data from the last offline run` and the
+Overview shows 30 batches, 22 verified, 8 rejected, 22 shipments and 80 documents. With Atlas and no
+OFFLINE banner, the same counts come from the read-only user.
+
 **7. Stop and start again.**
 
 ```powershell
@@ -155,10 +115,9 @@ docker compose up -d
 Your data and accounts survive because `data/` and `out/` are mounted from this folder. After a code
 change, rebuild before starting: `docker compose up --build -d`.
 
-If you later want Atlas instead of the offline sample, create the project's `.env` with the Atlas URIs
-before starting the container, then use `docker compose down` followed by
-`docker compose up -d` in a fresh shell (leave `GI_MODE` unset so the default `auto` applies). `.env`
-is ignored by Git and is never copied into the image.
+To switch to Atlas later, follow [Atlas credentials](#atlas-credentials-online-mode-only): create `.env`
+with the two URIs, then `docker compose down` and `docker compose up -d` from a shell where `GI_MODE` is
+unset. Compose passes the URIs and `GI_MODE` into the container.
 
 The container listens on `0.0.0.0:5000` internally; Compose publishes it as `127.0.0.1:5000:5000`, so it
 is reachable only from this PC. If port 5000 is busy, change the left-hand side of that mapping in
@@ -166,24 +125,28 @@ is reachable only from this PC. If port 5000 is busy, change the left-hand side 
 
 ## Commands
 
+Every command runs inside the `web` container. `run` starts a one-off container for a task that exits;
+`exec` targets the already-running dashboard.
+
 | Command | What it does |
 | --- | --- |
-| `python -m gi_trace.run_all [--yes] [--sample core]` | the whole pipeline; asks before replacing `data/` and `out/` |
-| `python -m gi_trace.web [--port 5000]` | the dashboard on http://127.0.0.1:5000 (this PC only); Ctrl+C stops it |
-| `python -m gi_trace.web.create_user` | add a dashboard account (hidden password) |
-| `python -m gi_trace.snapshot` | copy the Atlas data into `data/` for offline use (run_all does this itself) |
-| `python -m gi_trace.check_atlas` | Atlas reachable? write and read one test document |
-| `python -m gi_trace.docgen.verify out\certificates` | VALID / TAMPERED / UNKNOWN per PDF |
-| `python -m gi_trace.demo` | short in-memory walkthrough of the four mechanisms |
-| `python -m pytest` | 607 tests, offline |
-| `docker compose build` | build the dashboard image (Python 3.12 slim) |
-| `docker compose run --rm web python -m gi_trace.run_all --yes` | create the sample world in the mounted `data/` and `out/` |
-| `docker compose run --rm web python -m gi_trace.web.create_user` | add a dashboard account inside the container |
+| `docker compose build` | build the image with all runtime dependencies preinstalled |
 | `docker compose up -d` / `docker compose down` | start / stop the dashboard on http://127.0.0.1:5000 (this PC only) |
+| `docker compose logs -f web` | follow dashboard logs; Ctrl+C leaves the container running |
+| `docker compose run --rm web python -m gi_trace.run_all --yes` | create the sample world in `data/` and `out/` |
+| `docker compose run --rm web python -m gi_trace.run_all --yes --sample core` | smaller 3-batch sample |
+| `docker compose run --rm web python -m gi_trace.web.create_user` | add a dashboard account (hidden password) |
+| `docker compose exec web python -m gi_trace.web.create_user` | add an account while the dashboard is running |
+| `docker compose run --rm web python -m gi_trace.check_atlas` | check Atlas connectivity and permissions |
+| `docker compose run --rm web python -m gi_trace.snapshot` | copy Atlas data into `data/` for offline use |
+| `docker compose run --rm web python -m gi_trace.docgen.verify out/certificates` | VALID / TAMPERED / UNKNOWN per PDF |
+| `docker compose run --rm web python -m gi_trace.demo` | short in-memory walkthrough of the four mechanisms |
 
-`GI_MODE` picks where documents and ledgers live: `auto` (default) uses Atlas if it answers within
-30 seconds and the local files otherwise; `atlas` never falls back; `offline` never tries Atlas. A wrong
-password or malformed URI in `.env` is an error, not offline mode.
+The source tree contains 607 tests used by CI; the runtime image deliberately excludes `tests/`.
+
+`GI_MODE` is set for the container by Compose from your shell: `offline` never tries Atlas, `atlas` never
+falls back, and `auto` (the default) uses Atlas if it answers within 30 seconds. A wrong password or
+malformed URI in `.env` is an error, not offline mode.
 
 ## Dashboard
 
@@ -207,8 +170,8 @@ Restarting the dashboard signs everyone out.
 (`{"field": 1}` or `-1`) and a limit of 1 to 200, then Run (table) or Download CSV. Four examples fill
 the form. Read only. Refused: `$where`, `$function`, `$accumulator`, `$out`, `$merge` (anywhere, any
 letter case, also as text values such as `"$out"`). Atlas stops a query after 10 s; offline each query
-runs in its own Python process that is stopped after 10 s (about 1 s extra to start on Windows). CSV cells
-that a spreadsheet would treat as a formula start with an apostrophe.
+runs in its own process inside the container, also stopped after 10 s. CSV cells that a spreadsheet would
+treat as a formula start with an apostrophe.
 
 **Query Workbench.** Admin only. The split editor has line numbers, Tab indentation, Ctrl/⌘+Enter to run,
 syntax colours and sample queries. Its left pane is the editor; the right pane lists the readable tables
@@ -277,7 +240,7 @@ signed by this system's own keys, not by a recognised certificate authority.
 | Atlas or offline store, connection check | `gi_trace/doc_store.py`, `gi_trace/check_atlas.py` | — |
 | Ledger store (files or Atlas), signed checkpoints, pending handshake signatures | `gi_trace/ledger_store.py` | — |
 | Dashboard: pages, roles, CSRF, offline switch | `gi_trace/web/app.py`, `gi_trace/web/data.py` | — |
-| Local dashboard container | `Dockerfile`, `.dockerignore`, `docker-compose.yml` | — |
+| Dashboard container (the only run path) | `Dockerfile`, `.dockerignore`, `docker-compose.yml` | — |
 | Accounts, lockout, audit log | `gi_trace/web/users.py`, `gi_trace/web/create_user.py` | — |
 | Query console, Query Workbench (offline worker) and ledger viewer | `gi_trace/web/query.py`, `gi_trace/web/query_worker.py`, `gi_trace/web/sql_workbench.py`, `gi_trace/web/workbench.py`, `gi_trace/web/ledger_view.py` | — |
 | Offline snapshot of the Atlas data | `gi_trace/snapshot.py` | — |
@@ -317,6 +280,6 @@ signed by this system's own keys, not by a recognised certificate authority.
 - Dashboard: Verify reads a QR code only as pasted text (scan it with a phone app); there is no QR image
   decoder. Restarting the dashboard signs everyone out (a new session key each start). A user's role is
   read at sign-in, so a role changed later applies from the next sign-in.
-- Offline query-console queries run in a separate Python process: about 1 s to start on Windows.
-- `check_mongo.py` and `setup_mongodb.ps1` are from the earlier local-MongoDB setup and are not part of
-  the Atlas demo.
+- Offline query-console queries run in a separate process inside the container: about 1 s to start.
+- `check_mongo.py` and `setup_mongodb.ps1` are from an earlier local-MongoDB setup and are not part of
+  this Docker demo.
