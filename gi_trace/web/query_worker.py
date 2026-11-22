@@ -13,8 +13,11 @@ import sys
 
 import bson
 
+from .._docker import require_container
+
 
 def main() -> int:
+    require_container()
     out = sys.stdout.buffer
     ready = False
     try:

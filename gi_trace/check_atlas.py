@@ -1,4 +1,4 @@
-"""Checks the Atlas connection:  python -m gi_trace.check_atlas
+"""Checks the Atlas connection:  docker compose run --rm web python -m gi_trace.check_atlas
 
 Connects with ATLAS_WRITE_URI (from .env), lists the gi_trace collections, writes
 one test document to `certificates`, reads it back with ATLAS_READ_URI, then
@@ -10,6 +10,7 @@ import os
 import secrets
 import sys
 
+from ._docker import require_container
 from .doc_store import ATLAS_TIMEOUT_MS, connect_atlas, load_env
 
 
@@ -42,6 +43,7 @@ def run(env, connect=connect_atlas, log=print) -> int:
 
 
 def main() -> int:
+    require_container()
     load_env()
     return run(os.environ)
 

@@ -182,7 +182,8 @@ def render_pdf(title: str, issuer: Node, doc_id: str, issued_at: str, fields, tw
     for line in (f"JSON twin SHA-256: {twin_sha[:32]}", f"                   {twin_sha[32:]}",
                  f"Issuer Ed25519 signature: {_short(signature)}",
                  f"Ledger: {ledger}  block {_short(block_hash, 12)}",
-                 "Check with: python -m gi_trace.docgen.verify <this file>"):
+                 "Check inside Docker: docker compose run --rm web",
+                  "  python -m gi_trace.docgen.verify <this file>"):
         c.drawString(left, ty, line)
         ty -= 4.2 * mm
     qr_size = 38 * mm

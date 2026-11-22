@@ -14,28 +14,31 @@ nodes, no consensus algorithm, no mining or tokens; one program plays every part
 
 ## Before you start (5 minutes, the day before)
 
-1. Online: `python -m gi_trace.check_atlas` ends with `OK`. Empty the three Atlas ledger collections if
-   an earlier run filled them (README, "Starting Atlas over").
-2. `python -m gi_trace.run_all --yes`: `21 passed, 9 failed, all as expected`.
-3. Three logins exist (`python -m gi_trace.web.create_user`): admin, employee, delivery.
+Run every command from the project folder. Nothing runs from a local Python install.
+
+1. Online: `docker compose run --rm web python -m gi_trace.check_atlas` ends with `OK`. Empty the three
+   Atlas ledger collections if an earlier run filled them (README, "Starting Atlas over").
+2. `docker compose run --rm web python -m gi_trace.run_all --yes`: `21 passed, 9 failed, all as expected`.
+3. Three logins exist (`docker compose run --rm web python -m gi_trace.web.create_user`): admin,
+   employee, delivery.
 4. Copy one PDF to the desktop and make a tampered twin: open a copy of
    `out\certificates\hemp_lab_assay__HEMP-NP-0001.pdf` in Notepad, change one digit, save.
-5. Offline rehearsal: Wi-Fi off, `python -m gi_trace.web`, check the banner reads
-   `OFFLINE MODE: data as of ...`. Wi-Fi back on.
+5. Offline rehearsal: Wi-Fi off, `docker compose down` then `docker compose up --build`, check the
+   banner reads `OFFLINE MODE: data as of ...`. Wi-Fi back on.
 
 ## The 10-minute script
 
 | Min | Do | Say |
 | --- | --- | --- |
 | 0-1 | Terminal: the `run_all` table | 30 craft batches from Nepal, India and Pakistan. 21 pass the dual-compliance check, 9 fail for planted reasons: THC over 0.3 %, leather not vegetable-tanned, a lab file that does not match its certificate, a tanning certificate signed by the wrong party, a second export of the same batch. **[NOT BLOCKCHAIN]** for the SQL and MongoDB data; the checks write their results to the ledger **[BLOCKCHAIN]**. |
-| 1-2 | `python -m gi_trace.web`, sign in as **admin**, Overview (30 batches, 22 verified, 8 rejected, 22 shipments, 80 documents) | Counts and charts from Atlas through a read-only user. HEMP-NP-0004 shows as verified: its certificates passed, only its second export was refused. **[NOT BLOCKCHAIN]** |
+| 1-2 | `docker compose up --build`, sign in as **admin**, Overview (30 batches, 22 verified, 8 rejected, 22 shipments, 80 documents) | Counts and charts from Atlas through a read-only user. HEMP-NP-0004 shows as verified: its certificates passed, only its second export was refused. **[NOT BLOCKCHAIN]** |
 | 2-3 | Batches → HEMP-NP-0001 | Signed certificate fields, the ledger block that anchors this batch, its shipments and documents. The anchor is **[BLOCKCHAIN]** (tamper-evident anchoring). |
 | 3-4 | Shipments | Each export committed only after 4 or 5 parties signed: cooperative, lab or tanning registry, both customs offices. **[BLOCKCHAIN]** (multi-party commit, modelled on MP-SATP). |
 | 4-5 | Ledger → NP | Hash-linked blocks, each signed by its writer; "Chain valid". Point at the REDACTION block: three of six regulators corrected a waybill typo with a chameleon hash, and the chain still verifies. **[BLOCKCHAIN]** (hash links, signatures, controlled correction). |
 | 5-6 | Verify: upload the original PDF, then the tampered one | VALID, then TAMPERED: the PDF's hash, the issuer's signature and the ledger block must all agree. **[BLOCKCHAIN]** for the ledger check; the PDF itself is **[NOT BLOCKCHAIN]**. |
 | 6-7 | Query console: example "Hemp assays over the 0.3 % THC limit", Run (4 rows), then Download CSV | A read-only window into MongoDB for the admin, with a 10-second limit, at most 200 rows and dangerous operators refused. **[NOT BLOCKCHAIN]** |
 | 7-8 | Sign out; sign in as **delivery** | Delivery staff see only Shipments and Verify; typing `/query` gives "Not allowed". Same for employee with admin pages. **[NOT BLOCKCHAIN]** (role-based access). |
-| 8-9 | Turn Wi-Fi off, Ctrl+C the dashboard, start it again (up to 30 s), sign in as **admin** (a restart signs everyone out), Overview | Same counts from the offline copy, with the banner "OFFLINE MODE: data as of ...". **[NOT BLOCKCHAIN]** |
+| 8-9 | Turn Wi-Fi off, `docker compose down` then `docker compose up --build` (up to 30 s), sign in as **admin** (a restart signs everyone out), Overview | Same counts from the offline copy, with the banner "OFFLINE MODE: data as of ...". **[NOT BLOCKCHAIN]** |
 | 9-10 | Wrap up | Section 7 of PLAN.md: one program holds every key, PDFs are signed by this system's own keys, offline data is not merged back into Atlas. |
 
 ## Feature by feature
@@ -56,17 +59,23 @@ block's hash.
 One ledger per country (NP, IN, PK). Each block stores the previous block's hash and is signed with its
 writer's Ed25519 key; only that country's nodes may write. `verify_chain()` reports any edit. A signed
 checkpoint of the last block catches blocks cut off the end.
-*Show it:* Ledger page, "Chain valid". To show a failure, edit a **copy**, never the live `data/`
-(Command Prompt, project folder, after any run):
+*Show it:* Ledger page, "Chain valid". To show a failure, edit a **copy**, never the live `data/`.
+In PowerShell, from the project folder, after any run:
 
-1. `xcopy /E /I data %TEMP%\gi-demo-data`
-2. `set GI_MODE=offline` then `python -m gi_trace.web --data %TEMP%\gi-demo-data --port 5001`
-   (offline, so it reads the copy's files rather than Atlas). Sign in as admin at http://127.0.0.1:5001,
-   open Ledger, NP: "Chain valid".
-3. `notepad %TEMP%\gi-demo-data\ledgers\NP.json`, change one letter of the `batch_id` in the second
+1. `Copy-Item -Recurse data $env:TEMP\gi-demo-data`
+2. Start a second dashboard on port 5001 reading that copy (offline, so it uses the copy's files
+   rather than Atlas):
+
+   ```powershell
+   docker compose run --rm -d -v "${env:TEMP}\gi-demo-data:/app/data" -e GI_MODE=offline -e GI_PORT=5001 -p 127.0.0.1:5001:5001 web
+   ```
+
+   Sign in as admin at http://127.0.0.1:5001, open Ledger, NP: "Chain valid".
+3. `notepad $env:TEMP\gi-demo-data\ledgers\NP.json`, change one letter of the `batch_id` in the second
    block's payload, save.
 4. Reload the Ledger page: "Chain NOT valid", "block 1: payload does not match its chameleon digest", and
-   block 1 marked ✗. Close that window when done.
+   block 1 marked ✗. When done, find the container with `docker compose ps` and stop it with
+   `docker stop <name>`.
 
 ### Append-only storage [BLOCKCHAIN]
 Online the blocks are in Atlas under a user that cannot delete, with unique block positions; offline in
@@ -93,7 +102,8 @@ BLOCKCHAIN]**; the ledger block and signature they are checked against are **[BL
 The PDFs are signed with this project's own keys, not a recognised certificate authority.
 
 ### Dashboard, roles, login [NOT BLOCKCHAIN]
-Flask on 127.0.0.1 only. Three roles (table in the README). Passwords are stored as scrypt hashes; five
+Flask runs inside the image; Compose publishes it on 127.0.0.1 only. Three roles (table in the README).
+Passwords are stored as scrypt hashes; five
 wrong passwords lock an account for 5 minutes; every sign-in and lock is in the audit log (admin). Forms
 carry a CSRF token; cookies are HttpOnly and SameSite=Strict. Restarting the dashboard signs everyone out.
 
@@ -101,7 +111,8 @@ carry a CSRF token; cookies are HttpOnly and SameSite=Strict. Restarting the das
 Admin only. Read-only queries on `certificates` and `documents`, at most 200 rows, 10-second limit,
 `$where`, `$function`, `$accumulator`, `$out` and `$merge` refused. CSV export neutralises spreadsheet
 formulas. Four saved examples: rejected certificates; hemp assays over 0.3 % THC; all documents for
-HEMP-NP-0001; export clearances on the Nepal ledger.
+HEMP-NP-0001; export clearances on the Nepal ledger. The admin-only Query Workbench beside it adds a
+read-only SQL/NoSQL editor over `gi_trace.db` and the four document collections.
 
 ### Online and offline [NOT BLOCKCHAIN]
 With Atlas unreachable for 30 seconds the app uses local files and shows OFFLINE MODE. After every online
@@ -113,7 +124,7 @@ Data written offline stays local.
 | You see | Do |
 | --- | --- |
 | "Atlas already holds ledgers" | README, "Starting Atlas over" (2 minutes), or demo offline. |
-| NO DATA banner | Run `python -m gi_trace.run_all --yes`, reload. |
+| NO DATA banner | Run `docker compose run --rm web python -m gi_trace.run_all --yes`, reload. |
 | "A run is in progress or was interrupted" | A `data.new` folder was left; the next `run_all` removes it. The dashboard keeps showing the previous data. |
 | Signed out after restarting the dashboard | Expected: sign in again. |
 | Download says "Not found" | The last run failed after emptying `out/`; run `run_all` again. |

@@ -1,9 +1,8 @@
-"""Create a dashboard account:  python -m gi_trace.web.create_user [--db data/users.db]
+"""Create a dashboard account:  docker compose run --rm web python -m gi_trace.web.create_user
 
 Asks for the username (an email address is fine), the role and the password. The
 password is typed hidden, twice, and only its scrypt hash is stored. Where typing
 cannot be hidden (some IDE consoles, piped input) it stops instead of showing it.
-Run it in Command Prompt or PowerShell; in Git Bash use `winpty python -m ...`.
 """
 from __future__ import annotations
 
@@ -12,6 +11,7 @@ import getpass
 import sys
 import warnings
 
+from .._docker import require_container
 from .users import DEFAULT_DB, ROLES, UserError, UserStore
 
 
@@ -32,7 +32,8 @@ def run(db, ask=input, ask_hidden=getpass.getpass, log=print) -> int:
         return 1
     except getpass.GetPassWarning:
         log("\nERROR: this console cannot hide the password, so it was not asked for. "
-            "Run this in Command Prompt or PowerShell. Nothing was created.")
+            "Use an interactive `docker compose run --rm web python -m gi_trace.web.create_user`. "
+            "Nothing was created.")
         return 1
     except (EOFError, KeyboardInterrupt):
         log("\nCancelled. Nothing was created.")
@@ -42,6 +43,7 @@ def run(db, ask=input, ask_hidden=getpass.getpass, log=print) -> int:
 
 
 def main(argv=None) -> int:
+    require_container()
     ap = argparse.ArgumentParser(description="Create a dashboard account.")
     ap.add_argument("--db", default=str(DEFAULT_DB), help=f"accounts database (default: {DEFAULT_DB})")
     return run(ap.parse_args(argv).db)

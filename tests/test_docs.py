@@ -20,7 +20,10 @@ def test_readme_test_count_is_current(request):
 
 def test_every_command_in_the_guides_exists():
     modules = set(re.findall(r"python -m (gi_trace[\w.]*)", README + DEMO))
-    assert {"gi_trace.run_all", "gi_trace.web", "gi_trace.snapshot", "gi_trace.web.create_user"} <= modules
+    assert {"gi_trace.run_all", "gi_trace.snapshot", "gi_trace.web.create_user",
+            "gi_trace.check_atlas"} <= modules
+    assert "docker compose up --build" in README
+    assert "docker compose up --build" in DEMO
     for m in modules:
         assert importlib.util.find_spec(m) is not None, m
 

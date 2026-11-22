@@ -1,6 +1,7 @@
-"""End-to-end walkthrough: python -m gi_trace.demo"""
+"""End-to-end walkthrough: docker compose run --rm web python -m gi_trace.demo"""
 from __future__ import annotations
 
+from ._docker import require_container
 from .federated import shipment_dossier
 from .handshake import BorderGateway, HandshakeError
 from .ledger import LedgerError
@@ -19,6 +20,7 @@ def sign_all(world, gateway, shipment_id, skip=()):
 
 
 def main() -> None:
+    require_container()
     w = build_world()
     np_, in_, pk = w.ledgers["NP"], w.ledgers["IN"], w.ledgers["PK"]
 

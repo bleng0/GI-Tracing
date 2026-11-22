@@ -1,4 +1,4 @@
-"""One-time MongoDB Atlas setup:  python -m gi_trace.atlas_setup
+"""One-time MongoDB Atlas setup:  docker compose run --rm web python -m gi_trace.atlas_setup
 
 Reads ATLAS_PROJECT_ID, ATLAS_PUBLIC_KEY and ATLAS_PRIVATE_KEY from .env, then:
   1. allows this PC's public IP on the project's network access list
@@ -22,6 +22,8 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from ._docker import require_container
 
 API_ROOT = "https://cloud.mongodb.com/api/atlas/v2"
 DB = "gi_trace"
@@ -280,6 +282,7 @@ def run(env: dict, env_path: Path, make_api, connect, get_ip, sleep) -> int:
 
 
 def main() -> int:
+    require_container()
     from dotenv import dotenv_values
     env = {**dotenv_values(ENV_FILE), **os.environ}
     code = run(env, ENV_FILE, AtlasAPI, real_connect, public_ip, time.sleep)

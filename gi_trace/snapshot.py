@@ -1,4 +1,6 @@
-"""Offline copy of the Atlas data:  python -m gi_trace.snapshot   (run_all does this itself)
+"""Offline copy of the Atlas data:  docker compose run --rm web python -m gi_trace.snapshot
+
+run_all does this itself after every online run.
 
 Writes the Atlas certificates, documents, ledgers, checkpoints and pending handshake
 signatures into data/ in exactly the files an offline run uses (documents.json and
@@ -15,6 +17,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ._docker import require_container
 from .doc_store import load_env
 from .keystore import write_json
 from .ledger_io import block_to_json
@@ -75,6 +78,7 @@ def take_snapshot(world, log=print) -> str:
 
 
 def main(argv=None) -> int:
+    require_container()
     import argparse
     from .seed import open_world
 

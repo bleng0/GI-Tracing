@@ -1,7 +1,7 @@
 """Checks a generated PDF against the document store and the ledger.
 
-    python -m gi_trace.docgen.verify out/certificates/<file>.pdf [--data data]
-    python -m gi_trace.docgen.verify out/certificates          (every PDF in a folder)
+    docker compose run --rm web python -m gi_trace.docgen.verify out/certificates/<file>.pdf
+    docker compose run --rm web python -m gi_trace.docgen.verify out/certificates  (every PDF)
 
 Reports one of:
   VALID     the file is byte-for-byte the registered one, its JSON twin is unchanged,
@@ -23,6 +23,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
+from .._docker import require_container
 from ..crypto import canonical, sha256_hex, verify
 from .certificates import META_DOC_ID, META_TWIN_SHA256
 from .qr import qr_payload
@@ -169,6 +170,7 @@ def verify_qr(text: str, world, valid_chains: set | None = None) -> VerifyResult
 
 
 def main(argv=None) -> int:
+    require_container()
     from ..doc_store import load_env
     from ..seed import open_world
 

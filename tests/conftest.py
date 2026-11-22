@@ -10,6 +10,9 @@ def no_real_mongodb(monkeypatch):
     (the command-line main() functions load it)."""
     import dotenv
     monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False)
+    # Every CLI main() refuses to run outside the image; tests exercise them in
+    # process (and in child processes that inherit this environment).
+    monkeypatch.setenv("GI_DOCKER", "1")
     monkeypatch.setenv("GI_MODE", "offline")
     for var in ("ATLAS_WRITE_URI", "ATLAS_READ_URI"):
         monkeypatch.delenv(var, raising=False)

@@ -1,7 +1,7 @@
 """The whole story, start to end, with files kept on disk:
 
-    python -m gi_trace.run_all            (asks before replacing data/ and out/)
-    python -m gi_trace.run_all --yes      (no question)
+    docker compose run --rm web python -m gi_trace.run_all            (asks first)
+    docker compose run --rm web python -m gi_trace.run_all --yes      (no question)
 
 Steps: reset local data, seed the 30-batch sample, raw lab files, certificate PDFs
 and cooperative letters, dual-compliance oracle, QR codes, border handshake for
@@ -18,6 +18,7 @@ import sys
 import time
 from pathlib import Path
 
+from ._docker import require_container
 from .docgen.certificates import (
     certificate_pdf, documents_collection, export_clearance_pdf, membership_letter_pdf,
     redaction_notice_pdf, waybill_pdf,
@@ -256,7 +257,8 @@ redaction: {e(str(summary['redaction']))}. Run took {summary['seconds']} s.</p>
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Run the whole GI-Craft-Tracing pipeline locally.")
+    require_container()
+    ap = argparse.ArgumentParser(description="Run the whole GI-Craft-Tracing pipeline in the container.")
     ap.add_argument("--yes", action="store_true", help="replace existing data/ and out/ without asking")
     ap.add_argument("--data", default="data")
     ap.add_argument("--out", default="out")

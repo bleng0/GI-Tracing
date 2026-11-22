@@ -4,7 +4,9 @@ Working prototype of *Multi-Jurisdictional Traceability for South Asian GI Craft
 Himalayan hemp and Peshawari chappal batches moving between Nepal, India and Pakistan.
 
 This repository runs **only through Docker Compose**. The runtime and every dependency live inside the
-image; you do not need Python, pip, or a virtual environment on your machine.
+image; you do not need Python, pip, or a virtual environment on your machine. Every command-line entry
+point checks for the container flag, so a local `python -m ...` exits with a Docker reminder instead of
+running.
 
 ## Requirements
 
@@ -138,11 +140,12 @@ Every command runs inside the `web` container. `run` starts a one-off container 
 | `docker compose run --rm web python -m gi_trace.web.create_user` | add a dashboard account (hidden password) |
 | `docker compose exec web python -m gi_trace.web.create_user` | add an account while the dashboard is running |
 | `docker compose run --rm web python -m gi_trace.check_atlas` | check Atlas connectivity and permissions |
+| `docker compose run --rm web python -m gi_trace.atlas_setup` | one-time Atlas users, collections and indexes (writes the URIs to `.env`) |
 | `docker compose run --rm web python -m gi_trace.snapshot` | copy Atlas data into `data/` for offline use |
 | `docker compose run --rm web python -m gi_trace.docgen.verify out/certificates` | VALID / TAMPERED / UNKNOWN per PDF |
 | `docker compose run --rm web python -m gi_trace.demo` | short in-memory walkthrough of the four mechanisms |
 
-The source tree contains 607 tests used by CI; the runtime image deliberately excludes `tests/`.
+The source tree contains 610 tests used by CI; the runtime image deliberately excludes `tests/`.
 
 `GI_MODE` is set for the container by Compose from your shell: `offline` never tries Atlas, `atlas` never
 falls back, and `auto` (the default) uses Atlas if it answers within 30 seconds. A wrong password or
@@ -281,5 +284,3 @@ signed by this system's own keys, not by a recognised certificate authority.
   decoder. Restarting the dashboard signs everyone out (a new session key each start). A user's role is
   read at sign-in, so a role changed later applies from the next sign-in.
 - Offline query-console queries run in a separate process inside the container: about 1 s to start.
-- `check_mongo.py` and `setup_mongodb.ps1` are from an earlier local-MongoDB setup and are not part of
-  this Docker demo.

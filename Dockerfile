@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 FROM python:3.12-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    GI_DOCKER=1 \
     GI_HOST=0.0.0.0 \
     GI_PORT=5000
 WORKDIR /app

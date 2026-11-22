@@ -1,4 +1,4 @@
-"""The local dashboard (Flask, 127.0.0.1 only):  python -m gi_trace.web
+"""The dashboard (inside the container, published on 127.0.0.1):  docker compose up --build
 
 Pages and who sees them follow PLAN.md section 4. Every route checks the role:
 logged-out visitors go to the login page, a wrong role gets 403. Forms carry a
@@ -115,14 +115,15 @@ def _banners(world, error, loading: bool, run_pending: bool, is_admin: bool) -> 
         out.append({"kind": "offline", "text": "Opening the data (up to 30 s if Atlas is slow). Reload in a moment."})
     elif world is None:
         detail = f": {error}" if is_admin else ". Sign in as an admin to see why"
-        out.append({"kind": "error", "text": f"NO DATA{detail}. Run python -m gi_trace.run_all, then reload this page."})
+        out.append({"kind": "error", "text": f"NO DATA{detail}. Run docker compose run --rm web python -m gi_trace.run_all --yes, then reload."})
     elif world.offline and world.snapshot_at:
         out.append({"kind": "offline", "text": f"OFFLINE MODE: data as of {world.snapshot_at} (copy taken after the "
                                                "last online run). Atlas could not be reached."})
     elif world.offline:
         out.append({"kind": "offline", "text": "OFFLINE MODE: local data from the last offline run."})
     if run_pending:
-        out.append({"kind": "offline", "text": "A run (python -m gi_trace.run_all) is in progress or was interrupted; "
+        out.append({"kind": "offline", "text": "A run (docker compose run --rm web python -m gi_trace.run_all) "
+                                                "is in progress or was interrupted; "
                                                "this shows the data from the previous run."})
     return out
 
