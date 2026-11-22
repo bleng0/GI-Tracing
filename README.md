@@ -3,6 +3,9 @@
 Working prototype of *Multi-Jurisdictional Traceability for South Asian GI Crafts*:
 Himalayan hemp and Peshawari chappal batches moving between Nepal, India and Pakistan.
 
+Have Docker Desktop but not Python? Skip the setup below and go straight to
+[Dashboard in Docker](#dashboard-in-docker-fresh-clone-windows-powershell).
+
 ## Set up (once, about 3 minutes, plus 12 for the optional tests)
 
 Windows 10/11, Python 3.10 or newer (tested with 3.14). In **Command Prompt**, in the project folder:
@@ -82,18 +85,84 @@ Two ways, both with the same dashboard:
 If Atlas stops answering while the dashboard runs, it switches to the snapshot by itself and tries
 Atlas again every five minutes.
 
-## Dashboard in Docker
+## Dashboard in Docker (fresh clone, Windows PowerShell)
 
-With Docker Desktop running, `docker compose up --build` builds a Python 3.12 slim image and starts the
-dashboard on http://127.0.0.1:5000. Compose reads the optional `.env` in the project folder (nothing secret
-is copied into the image), defaults `GI_MODE` to `auto` and mounts the local `data/` and `out/` folders,
-so the container sees the same snapshot and PDFs as a local run. Create the dashboard accounts as above
-before starting the container. Ctrl+C (or `docker compose down`) stops it.
+Use this path if you have Docker Desktop and do **not** want to install Python locally. All commands below
+run from the project folder. They use the offline sample world, so no Atlas account or `.env` is needed.
 
-The dashboard still binds only 127.0.0.1 by default for local Python runs. Inside the container it listens
-on 0.0.0.0 so Docker can publish the port; Compose maps `127.0.0.1:5000:5000`, so the service is not exposed
-to the local network. To use a different host port, change the left-hand side of the port mapping in
-`docker-compose.yml`. `GI_MODE=offline docker compose up --build` forces offline mode for the container.
+**1. Install and check Docker.** Install Docker Desktop, start it, then:
+
+```powershell
+docker compose version
+```
+
+**2. Make the two folders the container will write to.** A Git clone does not contain `data/` or `out/`;
+they hold the database, keys, PDFs and accounts and must stay out of Git.
+
+```powershell
+New-Item -ItemType Directory -Force data
+New-Item -ItemType Directory -Force out
+```
+
+**3. Choose offline mode for this shell and build the image.**
+
+```powershell
+$env:GI_MODE = "offline"
+docker compose build
+```
+
+`GI_MODE` is passed into the container by `docker-compose.yml`. It stays set until you close the
+PowerShell window. In Command Prompt use `set GI_MODE=offline` instead.
+
+**4. Create the sample world.** This is a one-off container that exits when the pipeline finishes. It
+writes into the `data/` and `out/` folders you made in step 2.
+
+```powershell
+docker compose run --rm web python -m gi_trace.run_all --yes
+```
+
+**5. Create the three logins.** Run this next command three times. Answer `admin`, `employee` and
+`delivery` as the role, with a different password of at least 8 characters each time. The password is
+hidden while you type. The accounts are saved in `data/users.db`, which is why they are not in Git.
+
+```powershell
+docker compose run --rm web python -m gi_trace.web.create_user
+```
+
+If you already started the dashboard and need another account later, this also works:
+
+```powershell
+docker compose exec web python -m gi_trace.web.create_user
+```
+
+**6. Start the dashboard.**
+
+```powershell
+docker compose up -d
+docker compose logs -f web
+```
+
+Wait for `Running on http://127.0.0.1:5000`, then open **http://127.0.0.1:5000** and sign in. Ctrl+C
+closes the log view but leaves the container running. Only the `admin` account can open `/workbench`.
+
+**7. Stop and start again.**
+
+```powershell
+docker compose down
+docker compose up -d
+```
+
+Your data and accounts survive because `data/` and `out/` are mounted from this folder. After a code
+change, rebuild before starting: `docker compose up --build -d`.
+
+If you later want Atlas instead of the offline sample, create the project's `.env` with the Atlas URIs
+before starting the container, then use `docker compose down` followed by
+`docker compose up -d` in a fresh shell (leave `GI_MODE` unset so the default `auto` applies). `.env`
+is ignored by Git and is never copied into the image.
+
+The container listens on `0.0.0.0:5000` internally; Compose publishes it as `127.0.0.1:5000:5000`, so it
+is reachable only from this PC. If port 5000 is busy, change the left-hand side of that mapping in
+`docker-compose.yml`.
 
 ## Commands
 
@@ -107,7 +176,10 @@ to the local network. To use a different host port, change the left-hand side of
 | `python -m gi_trace.docgen.verify out\certificates` | VALID / TAMPERED / UNKNOWN per PDF |
 | `python -m gi_trace.demo` | short in-memory walkthrough of the four mechanisms |
 | `python -m pytest` | 607 tests, offline |
-| `docker compose up --build` | the same dashboard in a container, published on http://127.0.0.1:5000 (this PC only) |
+| `docker compose build` | build the dashboard image (Python 3.12 slim) |
+| `docker compose run --rm web python -m gi_trace.run_all --yes` | create the sample world in the mounted `data/` and `out/` |
+| `docker compose run --rm web python -m gi_trace.web.create_user` | add a dashboard account inside the container |
+| `docker compose up -d` / `docker compose down` | start / stop the dashboard on http://127.0.0.1:5000 (this PC only) |
 
 `GI_MODE` picks where documents and ledgers live: `auto` (default) uses Atlas if it answers within
 30 seconds and the local files otherwise; `atlas` never falls back; `offline` never tries Atlas. A wrong
