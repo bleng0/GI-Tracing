@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="workbench-intro">Read-only queries against the relational tables or the document store.
+One statement, at most {{ max_limit }} rows, stopped after {{ seconds }} s. Nothing here can write.</p>
+{% if error %}<p class="flash" role="alert">Query refused: {{ error }}</p>{% endif %}
+
+<form method="post" action="{{ url_for('workbench') }}" class="wb-form" id="wb-form">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="mode" id="wb-mode" value="{{ form.mode }}">
+
+  <div class="wb-toolbar">
+    <div class="segmented" role="group" aria-label="Query language">
+      <button type="button" class="wb-mode" data-mode="sql" aria-pressed="{{ 'true' if form.mode == 'sql' else 'false' }}">SQL</button>
+      <button type="button" class="wb-mode" data-mode="nosql" aria-pressed="{{ 'true' if form.mode == 'nosql' else 'false' }}">NoSQL</button>
+    </div>
+    <div class="wb-samples" role="group" aria-label="Sample queries">
+      {% for sample in sql_samples %}<button type="button" class="wb-sample wb-sample-sql" data-mode="sql" data-code="{{ sample.code }}">{{ sample.title }}</button>{% endfor %}
+      {% for sample in nosql_samples %}<button type="button" class="wb-sample wb-sample-nosql" data-mode="nosql" data-op="{{ sample.op }}" data-collection="{{ sample.collection }}" data-code="{{ sample.code }}">{{ sample.title }}</button>{% endfor %}
+    </div>
+    <button type="submit" class="wb-run" name="output" value="table" id="wb-run">Run <span class="wb-key" aria-hidden="true">Ctrl/⌘↵</span></button>
+  </div>
+
+  <div class="wb-panes">
+    <section class="wb-editor-pane" aria-labelledby="wb-editor-title">
+      <div class="wb-pane-head"><h2 id="wb-editor-title">Query</h2><span class="wb-hint" id="wb-hint"></span></div>
+      <div class="wb-editor">
+        <div class="wb-gutter" id="wb-gutter" aria-hidden="true">1</div>
+        <div class="wb-code">
+          <pre class="wb-highlight" aria-hidden="true"><code id="wb-highlight"></code></pre>
+          <textarea id="wb-code" name="code" spellcheck="false" autocapitalize="off" autocomplete="off"
+                    wrap="off" aria-label="Query text" rows="12">{{ form.code }}</textarea>
+        </div>
+      </div>
+      <div class="wb-editor-foot">
+        <label id="wb-op-wrap" hidden>Operation
+          <select name="op" id="wb-op">
+            <option value="find"{% if form.op == 'find' %} selected{% endif %}>find</option>
+            <option value="aggregate"{% if form.op == 'aggregate' %} selected{% endif %}>aggregate</option>
+          </select>
+        </label>
+        <label id="wb-collection-wrap" hidden>Collection
+          <select name="collection" id="wb-collection">
+            {% for c in nosql_collections %}<option value="{{ c.name }}"{% if c.name == form.collection %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="wb-limit">Limit <input type="number" name="limit" min="1" max="{{ max_limit }}" value="{{ form.limit }}"></label>
+      </div>
+    </section>
+
+    <aside class="wb-schema-pane" aria-labelledby="wb-schema-title">
+      <div class="wb-pane-head"><h2 id="wb-schema-title">Schema</h2></div>
+      <div id="wb-sql-schema" class="wb-schema">
+        {% for table in sql_schema %}<section class="wb-table">
+          <h3>{{ table.name }}</h3>
+          <p>{{ table.columns|join(', ') }}</p>
+        </section>{% else %}<p class="muted">No relational tables are available yet.</p>{% endfor %}
+      </div>
+      <div id="wb-nosql-schema" class="wb-schema" hidden>
+        {% for c in nosql_collections %}<section class="wb-table">
+          <h3>{{ c.name }}</h3><p>{{ c.detail }}</p>
+        </section>{% endfor %}
+      </div>
+    </aside>
+  </div>
+
+  <section class="wb-results" aria-labelledby="wb-results-title">
+    <div class="wb-results-head">
+      <h2 id="wb-results-title">Results</h2>
+      {% if result %}<p class="wb-meta" aria-live="polite">{{ result.count }} row{{ '' if result.count == 1 else 's' }} · {{ result.ms }} ms{% if result.truncated %} · capped at {{ max_limit }}{% endif %}</p>{% endif %}
+      <div class="wb-actions">
+        <button type="button" class="wb-view" data-view="table" aria-pressed="true">Table</button>
+        <button type="button" class="wb-view" data-view="json" aria-pressed="false">JSON</button>
+        <button type="submit" name="output" value="csv">CSV</button>
+        <button type="submit" name="output" value="json">JSON ↓</button>
+      </div>
+    </div>
+    {% if result %}
+    <div class="scroll wb-table-view" id="wb-table-view"><table class="results wb-table">
+      <tr>{% for column in result.columns %}<th>{{ column }}</th>{% endfor %}</tr>
+      {% for row in result.rows %}<tr>{% for value in row %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}
+    </table></div>
+    <pre class="wb-json-view" id="wb-json-view" hidden>{{ result.json }}</pre>
+    {% else %}<p class="wb-empty">Run a query to see results here.</p>{% endif %}
+  </section>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='workbench.js') }}" defer></script>{% endblock %}

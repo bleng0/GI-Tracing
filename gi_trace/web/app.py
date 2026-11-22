@@ -26,7 +26,7 @@ from ..crypto import sha256_hex
 from ..docgen.verify import verify_pdf, verify_qr
 from ..seed import staging_dir
 from ..storage import mtime_ns
-from . import data, ledger_view, query
+from . import data, ledger_view, query, workbench
 from .users import DEFAULT_DB, UserStore
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,7 +37,8 @@ STAFF = (ADMIN, EMPLOYEE)
 PAGES = [
     ("overview", "Overview", STAFF), ("batches", "Batches", STAFF), ("shipments", "Shipments", ALL),
     ("documents", "Documents", STAFF), ("verify", "Verify", ALL),
-    ("query", "Query console", (ADMIN,)), ("ledger", "Ledger", (ADMIN,)),
+    ("query", "Query console", (ADMIN,)), ("workbench", "Query Workbench", (ADMIN,)),
+    ("ledger", "Ledger", (ADMIN,)),
     ("audit", "Audit log", (ADMIN,)), ("users", "Users", (ADMIN,)),
 ]
 ROLES_FOR = {endpoint: roles for endpoint, _, roles in PAGES}
@@ -349,6 +350,32 @@ def create_app(data_dir=ROOT / "data", out_dir=ROOT / "out", users_db=DEFAULT_DB
         page = render_template("query.html", title="Query console", form=form, result=result, error=error,
                                examples=query.EXAMPLES, collections=query.COLLECTIONS, max_limit=query.MAX_LIMIT,
                                seconds=query.MAX_TIME_MS // 1000)
+        return page, (400 if error else 200)
+
+    @app.route("/workbench", methods=["GET", "POST"], endpoint="workbench")
+    @allowed("workbench")
+    def workbench_page():
+        form = workbench.form_from(request.form if request.method == "POST" else {})
+        error, result = None, None
+        if request.method == "POST":
+            world = world_or_none()
+            try:
+                result = workbench.run(holder.data_dir, world, form)
+            except (workbench.WorkbenchError, query.QueryError) as e:
+                error = str(e)
+            else:
+                output = form["output"]
+                if output == "csv":
+                    return Response("\ufeff" + workbench.to_csv(result), mimetype="text/csv",
+                                    headers={"Content-Disposition": 'attachment; filename="workbench.csv"'})
+                if output == "json":
+                    return Response(workbench.to_json(result), mimetype="application/json",
+                                    headers={"Content-Disposition": 'attachment; filename="workbench.json"'})
+        page = render_template("workbench.html", title="Query Workbench", form=form, result=result, error=error,
+                               sql_schema=workbench.schema(holder.data_dir), sql_samples=workbench.SQL_SAMPLES,
+                               nosql_samples=workbench.NOSQL_SAMPLES,
+                               nosql_collections=workbench.NOSQL_COLLECTIONS,
+                               max_limit=query.MAX_LIMIT, seconds=query.MAX_TIME_MS // 1000)
         return page, (400 if error else 200)
 
     @app.route("/ledger")
