@@ -8,3 +8,4 @@ data/keys/
 *.tmp
 __pycache__/
 .pytest_cache/
+.opencode/
