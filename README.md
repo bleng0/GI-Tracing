@@ -8,49 +8,32 @@ image; you do not need Python, pip, or a virtual environment on your machine. Ev
 point checks for the container flag, so a local `python -m ...` exits with a Docker reminder instead of
 running.
 
-## Requirements
+## Run it from a fresh clone (Windows PowerShell)
 
-- Windows 10/11 with Docker Desktop installed and running (or Docker Engine with Compose on Linux/macOS).
-- Git, to clone or update the repository.
+You need **Git** and **Docker Desktop** with its Linux engine running. Install Docker Desktop if it is
+not already installed, open it once, and wait until it says *Docker Desktop is running*. No Python
+installation is needed. If your friend has already cloned the repository, start at step 2.
 
-That is all. The commands below are PowerShell; on Linux/macOS use the same `docker compose` lines and
-set the environment variable with `export GI_MODE=offline`.
-
-## Atlas credentials (online mode only)
-
-A fresh clone works offline and needs no Atlas account. To use MongoDB Atlas instead, create `.env` in
-the project folder with two lines:
-
-```text
-ATLAS_WRITE_URI=<pipeline user URI>
-ATLAS_READ_URI=<dashboard read-only user URI>
-```
-
-Create those users in Atlas; the read-only user must not be able to write. `.env` is ignored by Git and is
-never copied into the image. Compose reads it when the container is created, so after changing it run
-`docker compose down` and then `docker compose up -d`. Check the connection with:
+**1. Clone the repository and enter the folder.**
 
 ```powershell
-docker compose run --rm web python -m gi_trace.check_atlas
+git clone <REPO_URL>
+cd GI-Tracing
 ```
 
-It ends with `OK: Atlas reachable, write and read work`. On a different network, add that network's IP
-under Network Access in Atlas before running the check.
+Use the real GitHub URL in place of `<REPO_URL>`.
 
-Without those two URIs the dashboard uses the local snapshot, and a fresh offline run works normally.
-
-## Run the project with Docker (fresh clone)
-
-All commands run from the project folder. The first pass uses the offline sample world, so no Atlas
-account or `.env` is needed.
-
-**1. Install and check Docker.** Install Docker Desktop, start it, then:
+**2. Confirm Docker is ready.**
 
 ```powershell
 docker compose version
+docker info
 ```
 
-**2. Make the two folders the container will write to.** A Git clone does not contain `data/` or `out/`;
+`docker info` must print without an error. If it fails, start Docker Desktop, wait for it to finish, and
+make sure it is using Linux containers (Docker Desktop tray → *Switch to Linux containers*).
+
+**3. Create the folders the container writes to.** A GitHub clone does not contain `data/` or `out/`;
 they hold the database, keys, PDFs and accounts and must stay out of Git.
 
 ```powershell
@@ -58,72 +41,90 @@ New-Item -ItemType Directory -Force data
 New-Item -ItemType Directory -Force out
 ```
 
-**3. Choose offline mode for this shell and build the image.**
+**4. Set offline mode and build the image.**
 
 ```powershell
 $env:GI_MODE = "offline"
 docker compose build
 ```
 
-`GI_MODE` is passed into the container by `docker-compose.yml`. It stays set until you close the
-PowerShell window. In Command Prompt use `set GI_MODE=offline` instead.
+`GI_MODE` is passed into the container by `docker-compose.yml`. It stays set until this PowerShell window
+is closed. In Command Prompt use `set GI_MODE=offline`; on Linux/macOS use `export GI_MODE=offline` and
+`mkdir -p data out`.
 
-**4. Create the sample world.** This is a one-off container that exits when the pipeline finishes. It
-writes into the `data/` and `out/` folders you made in step 2. It ends with a line like
+**5. Create the sample world.** This one-off container exits when the pipeline finishes. It writes into
+the `data/` and `out/` folders from step 3 and ends with a line like
 `21 passed, 9 failed, all as expected | 22 shipments, 80 PDFs | ... (all chains valid)`.
 
 ```powershell
 docker compose run --rm web python -m gi_trace.run_all --yes
 ```
 
-For a smaller world with 3 batches instead of 30, add `--sample core`. Re-running this command replaces
-`data/` and `out/` but never `data/users.db`.
+For a smaller world with 3 batches, add `--sample core`. Re-running replaces `data/` and `out/` but never
+`data/users.db`.
 
-**5. Create the three logins.** Run this next command three times. Answer `admin`, `employee` and
-`delivery` as the role, with a different password of at least 8 characters each time. The password is
-hidden while you type. The accounts are saved in `data/users.db`, which is why they are not in Git.
+**6. Create the three logins.** Run this command three times. Use role `admin`, then `employee`, then
+`delivery`, with a different password of at least 8 characters each time. The password is hidden while
+you type. Accounts live in `data/users.db`, which is why they are not in Git.
 
 ```powershell
 docker compose run --rm web python -m gi_trace.web.create_user
 ```
 
-If you already started the dashboard and need another account later, this also works:
+If the dashboard is already running, an account can also be added later with:
 
 ```powershell
 docker compose exec web python -m gi_trace.web.create_user
 ```
 
-**6. Start the dashboard.**
+**7. Start the dashboard.**
 
 ```powershell
 docker compose up -d
 docker compose logs -f web
 ```
 
-Wait for `Running on http://127.0.0.1:5000`, then open **http://127.0.0.1:5000** and sign in. Ctrl+C
+Wait for `Running on http://127.0.0.1:5000`, then open **http://127.0.0.1:5000** and sign in. `Ctrl+C`
 closes the log view but leaves the container running. Only the `admin` account can open `/workbench`.
 
-With the offline sample the banner reads `OFFLINE MODE: local data from the last offline run` and the
-Overview shows 30 batches, 22 verified, 8 rejected, 22 shipments and 80 documents. With Atlas and no
-OFFLINE banner, the same counts come from the read-only user.
+The banner reads `OFFLINE MODE: local data from the last offline run`, and the Overview shows 30 batches,
+22 verified, 8 rejected, 22 shipments and 80 documents.
 
-**7. Stop and start again.**
+**8. Stop and start again.**
 
 ```powershell
 docker compose down
 docker compose up -d
 ```
 
-Your data and accounts survive because `data/` and `out/` are mounted from this folder. After a code
-change, rebuild before starting: `docker compose up --build -d`.
-
-To switch to Atlas later, follow [Atlas credentials](#atlas-credentials-online-mode-only): create `.env`
-with the two URIs, then `docker compose down` and `docker compose up -d` from a shell where `GI_MODE` is
-unset. Compose passes the URIs and `GI_MODE` into the container.
+Your data and accounts survive because `data/` and `out/` are mounted from the project folder. After a
+code change, rebuild with `docker compose up --build -d`.
 
 The container listens on `0.0.0.0:5000` internally; Compose publishes it as `127.0.0.1:5000:5000`, so it
 is reachable only from this PC. If port 5000 is busy, change the left-hand side of that mapping in
 `docker-compose.yml`.
+
+## Use Atlas instead (optional)
+
+The steps above work with no Atlas account and no `.env`. To use MongoDB Atlas instead, create `.env`
+in the project folder with two lines:
+
+```text
+ATLAS_WRITE_URI=<pipeline user URI>
+ATLAS_READ_URI=<dashboard read-only user URI>
+```
+
+Create those users in Atlas; the read-only user must not be able to write. `.env` is ignored by Git and is
+never copied into the image. From a fresh PowerShell window (so `GI_MODE` is unset), run step 5 again,
+then `docker compose down` and `docker compose up -d`. Check the connection with:
+
+```powershell
+docker compose run --rm web python -m gi_trace.check_atlas
+```
+
+It ends with `OK: Atlas reachable, write and read work`. On a different network, add that network's IP
+under Network Access in Atlas before running the check. A wrong password or malformed URI in `.env` is an
+error, not offline mode.
 
 ## Commands
 
