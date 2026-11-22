@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    image: gi-craft-tracing-web
+    ports:
+      - "127.0.0.1:5000:5000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      GI_MODE: ${GI_MODE:-auto}
+    volumes:
+      - ./data:/app/data
+      - ./out:/app/out
+    restart: unless-stopped
