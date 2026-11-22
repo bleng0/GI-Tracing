@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 
 from ..doc_store import load_env
@@ -15,18 +14,15 @@ def main(argv=None) -> int:
     ap.add_argument("--data", default=str(ROOT / "data"))
     ap.add_argument("--out", default=str(ROOT / "out"))
     ap.add_argument("--users", default=str(DEFAULT_DB))
-    # Local runs stay on the loopback interface. The container sets GI_HOST so
-    # Docker can publish the port on 127.0.0.1 of the host instead.
-    ap.add_argument("--host", default=os.environ.get("GI_HOST", "127.0.0.1"))
-    ap.add_argument("--port", type=int, default=int(os.environ.get("GI_PORT", "5000")))
+    ap.add_argument("--port", type=int, default=5000)
     args = ap.parse_args(argv)
     load_env()
     app = create_app(args.data, args.out, args.users)
     print("Opening the data (waits up to 30 s for Atlas)...")
     world, error = app.config["HOLDER"].get()
     print("Data: " + ("ERROR " + error if world is None else "OFFLINE (local copy)" if world.offline else "MongoDB Atlas"))
-    print(f"Dashboard: http://{args.host}:{args.port}   (Ctrl+C to stop)")
-    app.run(host=args.host, port=args.port, threaded=True, debug=False)
+    print(f"Dashboard: http://127.0.0.1:{args.port}   (Ctrl+C to stop)")
+    app.run(host="127.0.0.1", port=args.port, threaded=True, debug=False)
     return 0
 
 

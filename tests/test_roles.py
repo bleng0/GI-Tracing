@@ -21,17 +21,15 @@ GET = {
     "/overview": {A, E}, "/batches": {A, E}, "/batches/HEMP-NP-0001": {A, E},
     "/shipments": {A, E, D}, "/documents": {A, E},
     f"/documents/{LAB}/download": {A, E}, f"/documents/{WAYBILL}/download": {A},  # waybills print prices
-    "/verify": {A, E, D}, "/query": {A}, "/query?example=0": {A}, "/workbench": {A},
-    "/ledger": {A}, "/ledger?j=PK": {A},
+    "/verify": {A, E, D}, "/query": {A}, "/query?example=0": {A}, "/ledger": {A}, "/ledger?j=PK": {A},
     "/audit": {A}, "/users": {A},
 }
-POST = {"/verify": {A, E, D}, "/query": {A}, "/workbench": {A}}
+POST = {"/verify": {A, E, D}, "/query": {A}}
 # Every URL rule must appear here: a new route without a row fails test_every_route_is_in_the_matrix.
 RULES = {
     "/overview": "/overview", "/batches": "/batches", "/batches/<batch_id>": "/batches/HEMP-NP-0001",
     "/shipments": "/shipments", "/documents": "/documents", "/documents/<doc_id>/download": f"/documents/{LAB}/download",
-    "/verify": "/verify", "/query": "/query", "/workbench": "/workbench", "/ledger": "/ledger",
-    "/audit": "/audit", "/users": "/users",
+    "/verify": "/verify", "/query": "/query", "/ledger": "/ledger", "/audit": "/audit", "/users": "/users",
     "/login": None, "/logout": None, "/": None, "/static/<path:filename>": None,
 }
 
@@ -68,8 +66,6 @@ def clients(app):
 def form_for(path):
     if path == "/verify":
         return {"qr": "hello"}
-    if path == "/workbench":
-        return {"mode": "sql", "code": "SELECT 1", "limit": "5"}
     return {"collection": "certificates", "filter": "{}", "limit": "5"}
 
 
@@ -79,8 +75,6 @@ POST_VARIANTS = {
     "/verify upload": ("/verify", {A, E, D}, lambda: {"pdf": (io.BytesIO(b"%PDF-1.4 not ours"), "x.pdf")}),
     "/query with a file": ("/query", {A}, lambda: {"collection": "certificates", "filter": "{}", "limit": "5",
                                                    "pdf": (io.BytesIO(b"x"), "x.pdf")}),
-    "/workbench csv": ("/workbench", {A}, lambda: {"mode": "sql", "code": "SELECT 1", "output": "csv"}),
-    "/workbench json": ("/workbench", {A}, lambda: {"mode": "sql", "code": "SELECT 1", "output": "json"}),
 }
 
 
@@ -179,8 +173,7 @@ def test_logout_ends_each_role_even_for_a_copied_cookie(app, role):
 
 
 def test_menu_shows_exactly_the_allowed_pages(clients):
-    menus = {A: {"/overview", "/batches", "/shipments", "/documents", "/verify", "/query", "/workbench",
-                 "/ledger", "/audit", "/users"},
+    menus = {A: {"/overview", "/batches", "/shipments", "/documents", "/verify", "/query", "/ledger", "/audit", "/users"},
              E: {"/overview", "/batches", "/shipments", "/documents", "/verify"},
              D: {"/shipments", "/verify"}}
     for role, expected in menus.items():

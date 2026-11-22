@@ -16,7 +16,7 @@ from test_atlas_store import FakeAtlas
 PW = {"admin": "Admin-Pass-123", "employee": "Employee-Pass-123", "delivery": "Delivery-Pass-123"}
 STAFF_ONLY = {"/overview", "/batches", "/documents", "/batches/HEMP-NP-0001",
               "/documents/hemp_lab_assay:HEMP-NP-0001/download"}
-ADMIN_ONLY = {"/audit", "/users", "/query", "/workbench", "/ledger"}
+ADMIN_ONLY = {"/audit", "/users", "/query", "/ledger"}
 EVERYONE = {"/shipments", "/verify"}
 
 
