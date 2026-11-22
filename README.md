@@ -3,7 +3,7 @@
 Working prototype of *Multi-Jurisdictional Traceability for South Asian GI Crafts*:
 Himalayan hemp and Peshawari chappal batches moving between Nepal, India and Pakistan.
 
-## Set up (once, about 3 minutes, plus 9 for the optional tests)
+## Set up (once, about 3 minutes, plus 12 for the optional tests)
 
 Windows 10/11, Python 3.10 or newer (tested with 3.14). In **Command Prompt**, in the project folder:
 
@@ -16,7 +16,7 @@ pip install -r requirements.txt
 In PowerShell, `activate` is blocked by the default execution policy; run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use Command Prompt.
 
-Optional: `python -m pytest` runs 488 tests in about 9 minutes on Windows. They always run offline and never touch
+Optional: `python -m pytest` runs 607 tests in about 12 minutes on Windows. They always run offline and never touch
 Atlas, `.env`, `data/` or `out/` (they work in temporary folders).
 
 **Atlas (online use only).** `.env` must hold `ATLAS_WRITE_URI` (the pipeline's user) and
@@ -82,6 +82,19 @@ Two ways, both with the same dashboard:
 If Atlas stops answering while the dashboard runs, it switches to the snapshot by itself and tries
 Atlas again every five minutes.
 
+## Dashboard in Docker
+
+With Docker Desktop running, `docker compose up --build` builds a Python 3.12 slim image and starts the
+dashboard on http://127.0.0.1:5000. Compose reads the optional `.env` in the project folder (nothing secret
+is copied into the image), defaults `GI_MODE` to `auto` and mounts the local `data/` and `out/` folders,
+so the container sees the same snapshot and PDFs as a local run. Create the dashboard accounts as above
+before starting the container. Ctrl+C (or `docker compose down`) stops it.
+
+The dashboard still binds only 127.0.0.1 by default for local Python runs. Inside the container it listens
+on 0.0.0.0 so Docker can publish the port; Compose maps `127.0.0.1:5000:5000`, so the service is not exposed
+to the local network. To use a different host port, change the left-hand side of the port mapping in
+`docker-compose.yml`. `GI_MODE=offline docker compose up --build` forces offline mode for the container.
+
 ## Commands
 
 | Command | What it does |
@@ -93,7 +106,8 @@ Atlas again every five minutes.
 | `python -m gi_trace.check_atlas` | Atlas reachable? write and read one test document |
 | `python -m gi_trace.docgen.verify out\certificates` | VALID / TAMPERED / UNKNOWN per PDF |
 | `python -m gi_trace.demo` | short in-memory walkthrough of the four mechanisms |
-| `python -m pytest` | 488 tests, offline |
+| `python -m pytest` | 607 tests, offline |
+| `docker compose up --build` | the same dashboard in a container, published on http://127.0.0.1:5000 (this PC only) |
 
 `GI_MODE` picks where documents and ledgers live: `auto` (default) uses Atlas if it answers within
 30 seconds and the local files otherwise; `atlas` never falls back; `offline` never tries Atlas. A wrong
@@ -113,6 +127,7 @@ Restarting the dashboard signs everyone out.
 | Documents, download (waybills, which print prices: admin only) | yes | yes | |
 | Verify a PDF or pasted QR text | yes | yes | yes |
 | Query console | yes | | |
+| Query Workbench (SQL + NoSQL) | yes | | |
 | Ledger viewer and chain check | yes | | |
 | Audit log, users | yes | | |
 
@@ -122,6 +137,15 @@ the form. Read only. Refused: `$where`, `$function`, `$accumulator`, `$out`, `$m
 letter case, also as text values such as `"$out"`). Atlas stops a query after 10 s; offline each query
 runs in its own Python process that is stopped after 10 s (about 1 s extra to start on Windows). CSV cells
 that a spreadsheet would treat as a formula start with an apostrophe.
+
+**Query Workbench.** Admin only. The split editor has line numbers, Tab indentation, Ctrl/⌘+Enter to run,
+syntax colours and sample queries. Its left pane is the editor; the right pane lists the readable tables
+(SQL) or collections (NoSQL). SQL mode accepts one `SELECT`/`WITH` query against `gi_trace.db` only — no
+semicolons, no `users.db`, no attaches or writes; SQLite opens the file read-only, with `query_only`, a
+statement authorizer and a 10 s stop. NoSQL mode offers `find` and read-only `aggregate` on `certificates`,
+`documents`, `ledger_blocks` and `ledger_heads`; stages that reach another collection or run code are
+refused. Both modes cap results at 200 rows, show the count and elapsed milliseconds, and offer a table or
+JSON view and CSV/JSON downloads. The old Query console is unchanged.
 
 **Ledger viewer.** Choose NP, IN or PK. It reads the blocks from storage on every visit (about 1 s for 80
 blocks) and shows "Chain valid" or each problem, with the affected blocks marked ✗.
@@ -181,8 +205,9 @@ signed by this system's own keys, not by a recognised certificate authority.
 | Atlas or offline store, connection check | `gi_trace/doc_store.py`, `gi_trace/check_atlas.py` | — |
 | Ledger store (files or Atlas), signed checkpoints, pending handshake signatures | `gi_trace/ledger_store.py` | — |
 | Dashboard: pages, roles, CSRF, offline switch | `gi_trace/web/app.py`, `gi_trace/web/data.py` | — |
+| Local dashboard container | `Dockerfile`, `.dockerignore`, `docker-compose.yml` | — |
 | Accounts, lockout, audit log | `gi_trace/web/users.py`, `gi_trace/web/create_user.py` | — |
-| Query console (offline worker) and ledger viewer | `gi_trace/web/query.py`, `gi_trace/web/query_worker.py`, `gi_trace/web/ledger_view.py` | — |
+| Query console, Query Workbench (offline worker) and ledger viewer | `gi_trace/web/query.py`, `gi_trace/web/query_worker.py`, `gi_trace/web/sql_workbench.py`, `gi_trace/web/workbench.py`, `gi_trace/web/ledger_view.py` | — |
 | Offline snapshot of the Atlas data | `gi_trace/snapshot.py` | — |
 | Access-control matrix and break-it check | `tests/test_roles.py`, `tests/test_break_it.py` | — |
 
